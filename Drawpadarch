@@ -1,0 +1,2478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DrawPad Arch v1.0</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { width:100%; height:100%; overflow:hidden; }
+body { font-family:'Segoe UI',system-ui,sans-serif; background:#1a1a2e; color:#e2e8f0; display:flex; flex-direction:column; user-select:none; }
+
+#toolbar {
+  display:flex; align-items:center; gap:5px; padding:6px 10px;
+  background:#16213e; border-bottom:1px solid #0f3460;
+  flex-shrink:0; flex-wrap:wrap; min-height:46px; z-index:10;
+}
+.tool-group { display:flex; gap:3px; align-items:center; }
+.tool-sep { width:1px; height:26px; background:#0f3460; margin:0 3px; flex-shrink:0; }
+.tool-label { font-size:10px; color:#64748b; margin-right:2px; }
+
+button.tool {
+  background:transparent; border:1px solid transparent; border-radius:6px;
+  color:#94a3b8; cursor:pointer; padding:4px 7px; font-size:12px;
+  display:flex; align-items:center; gap:4px; transition:all 0.12s; white-space:nowrap;
+}
+button.tool:hover { background:#1e3a5f; border-color:#0f3460; color:#e2e8f0; }
+button.tool.active { background:#0f3460; border-color:#3b82f6; color:#60a5fa; }
+button.tool svg { width:15px; height:15px; flex-shrink:0; }
+
+.color-swatch { width:20px; height:20px; border-radius:4px; border:2px solid transparent; cursor:pointer; transition:border-color 0.12s; flex-shrink:0; }
+.color-swatch.active,.color-swatch:hover { border-color:#3b82f6; }
+#customColor { width:28px; height:24px; border:1px solid #0f3460; border-radius:4px; cursor:pointer; background:transparent; padding:2px; }
+input[type=range] { accent-color:#3b82f6; cursor:pointer; }
+select.tool-select { background:#1e3a5f; border:1px solid #0f3460; border-radius:5px; color:#94a3b8; font-size:11px; padding:3px 5px; cursor:pointer; }
+
+#appTitle { font-size:14px; font-weight:700; color:#60a5fa; letter-spacing:-0.5px; flex-shrink:0; }
+#appSubtitle { font-size:9px; color:#3b82f6; letter-spacing:0.12em; text-transform:uppercase; display:block; margin-top:-2px; }
+
+/* Main layout */
+#main { display:flex; flex:1; min-height:0; }
+
+/* Icon Panel */
+#icon-panel {
+  width:0; flex-shrink:0; background:#0d1b2e; border-right:1px solid #0f3460;
+  display:flex; flex-direction:column; overflow:hidden;
+  transition:width 0.22s cubic-bezier(0.4,0,0.2,1);
+}
+#icon-panel.open { width:260px; }
+#panel-header { padding:10px 12px 6px; border-bottom:1px solid #0f3460; flex-shrink:0; }
+#panel-title { font-size:12px; font-weight:600; color:#94a3b8; margin-bottom:6px; }
+.tab-bar { display:flex; gap:2px; flex-wrap:wrap; }
+.tab-btn { background:transparent; border:1px solid #0f3460; border-radius:4px; color:#64748b; font-size:10px; padding:3px 7px; cursor:pointer; transition:all 0.1s; }
+.tab-btn:hover { color:#94a3b8; background:#1e3a5f; }
+.tab-btn.active { background:#0f3460; border-color:#3b82f6; color:#60a5fa; }
+#icon-search { width:100%; margin-top:6px; background:#1e293b; border:1px solid #0f3460; border-radius:5px; color:#e2e8f0; font-size:12px; padding:5px 8px; outline:none; }
+#icon-search:focus { border-color:#3b82f6; }
+/* Icon scroll — takes remaining space but yields to the bottom strip */
+#icon-scroll { flex:1; overflow-y:auto; padding:8px; min-height:0; }
+#icon-scroll::-webkit-scrollbar { width:4px; }
+#icon-scroll::-webkit-scrollbar-thumb { background:#1e3a5f; border-radius:2px; }
+.icon-section-label { font-size:9px; color:#475569; text-transform:uppercase; letter-spacing:0.1em; padding:6px 2px 4px; }
+.icon-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:8px; }
+.icon-cell { display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 3px; border-radius:6px; cursor:pointer; border:1px solid transparent; transition:all 0.12s; background:#111827; }
+.icon-cell:hover { background:#1e3a5f; border-color:#3b82f6; }
+.icon-cell.placing { background:#0f3460; border-color:#60a5fa; animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{border-color:#60a5fa} 50%{border-color:#3b82f6} }
+.icon-cell .icon-wrap { width:32px; height:32px; display:flex; align-items:center; justify-content:center; }
+.icon-cell .icon-wrap img { width:32px; height:32px; object-fit:contain; }
+.icon-cell span { font-size:8px; color:#64748b; text-align:center; line-height:1.2; max-width:56px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%; }
+.icon-cell:hover span { color:#94a3b8; }
+.icon-loading { text-align:center; color:#475569; font-size:11px; padding:20px; }
+
+/* Bottom strip — size slider + online search — always pinned, never clipped */
+#panel-bottom {
+  flex-shrink:0; display:flex; flex-direction:column; border-top:1px solid #0f3460;
+}
+#icon-size-wrap { display:flex; align-items:center; gap:6px; padding:6px 12px; font-size:10px; color:#64748b; }
+#icon-size-wrap input { flex:1; }
+
+/* Online search section */
+#online-search-section {
+  border-top:2px solid #0f3460; background:#080f1a;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+/* When expanded, cap results so panel doesn't overflow viewport */
+#online-search-section:not(.collapsed) { max-height:240px; }
+#online-search-header {
+  display:flex; align-items:center; gap:6px; padding:7px 10px 5px;
+  cursor:pointer; user-select:none; flex-shrink:0;
+}
+#online-search-header svg { width:12px; height:12px; color:#f59e0b; flex-shrink:0; }
+#online-search-header .os-title { font-size:10px; font-weight:600; color:#f59e0b; letter-spacing:0.05em; flex:1; }
+#online-search-header .os-badge { font-size:8px; background:#1c1200; border:1px solid #78350f; color:#d97706; border-radius:3px; padding:1px 5px; }
+#online-search-header .os-chevron { font-size:10px; color:#475569; transition:transform 0.2s; }
+#online-search-section.collapsed #online-search-header .os-chevron { transform:rotate(-90deg); }
+#online-search-body { padding:0 8px 8px; display:flex; flex-direction:column; flex:1; min-height:0; }
+#online-search-section.collapsed #online-search-body { display:none; }
+#online-search-input-wrap { display:flex; gap:4px; margin-bottom:6px; flex-shrink:0; }
+#online-search-input {
+  flex:1; background:#1e293b; border:1px solid #0f3460; border-radius:5px;
+  color:#e2e8f0; font-size:11px; padding:5px 8px; outline:none;
+}
+#online-search-input:focus { border-color:#f59e0b; }
+#online-search-btn {
+  background:#1c1200; border:1px solid #78350f; border-radius:5px;
+  color:#f59e0b; font-size:11px; padding:4px 8px; cursor:pointer; white-space:nowrap; transition:all 0.1s;
+}
+#online-search-btn:hover { background:#292002; border-color:#f59e0b; }
+#online-search-btn:disabled { opacity:0.4; cursor:default; }
+#online-results { flex:1; overflow-y:auto; min-height:0; }
+#online-results::-webkit-scrollbar { width:4px; }
+#online-results::-webkit-scrollbar-thumb { background:#1e3a5f; border-radius:2px; }
+.os-status { font-size:10px; color:#475569; text-align:center; padding:12px 4px; }
+.os-status.loading { color:#f59e0b; }
+.os-status.error   { color:#f87171; }
+.os-icon-cell {
+  display:flex; align-items:center; gap:8px; padding:5px 6px; border-radius:5px;
+  cursor:pointer; border:1px solid transparent; transition:all 0.1s; margin-bottom:2px;
+}
+.os-icon-cell:hover { background:#1e3a5f; border-color:#3b82f6; }
+.os-icon-cell.placing { background:#0f3460; border-color:#60a5fa; }
+.os-icon-cell .os-preview { width:28px; height:28px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+.os-icon-cell .os-preview img { width:28px; height:28px; object-fit:contain; }
+.os-icon-cell .os-info { flex:1; min-width:0; }
+.os-icon-cell .os-name { font-size:10px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.os-icon-cell .os-set  { font-size:8px; color:#475569; }
+.os-icon-cell .os-color-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; border:1px solid #0f3460; }
+
+/* Canvas area */
+#canvas-wrap { flex:1; overflow:hidden; position:relative; min-width:0; }
+#canvas { position:absolute; top:0; left:0; cursor:crosshair; }
+
+#status { position:absolute; bottom:8px; left:12px; font-size:10px; color:#475569; pointer-events:none; }
+#shortcuts { position:absolute; bottom:8px; right:12px; font-size:10px; color:#334155; pointer-events:none; }
+.kbd { background:#1e293b; border:1px solid #334155; border-radius:3px; padding:1px 4px; font-size:9px; }
+#selectionBox { position:absolute; pointer-events:none; border:2px dashed #3b82f6; background:rgba(59,130,246,0.05); display:none; }
+#place-hint { position:absolute; top:14px; left:50%; transform:translateX(-50%); background:#0f3460; border:1px solid #3b82f6; color:#60a5fa; border-radius:6px; padding:5px 14px; font-size:11px; pointer-events:none; display:none; z-index:10; white-space:nowrap; }
+
+/* Dropdowns */
+.dropdown-wrap { position:relative; display:inline-flex; }
+.dropdown-menu { display:none; position:absolute; top:calc(100% + 4px); right:0; background:#16213e; border:1px solid #0f3460; border-radius:8px; min-width:190px; z-index:2000; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.5); }
+.dropdown-wrap.open .dropdown-menu { display:block; }
+.dd-header { font-size:9px; text-transform:uppercase; letter-spacing:0.08em; color:#475569; padding:7px 12px 3px; border-bottom:1px solid #0f3460; }
+.dd-item { display:flex; align-items:center; gap:9px; padding:8px 13px; cursor:pointer; color:#94a3b8; font-size:12px; transition:background 0.1s; border:none; background:none; width:100%; text-align:left; }
+.dd-item:hover { background:#1e3a5f; color:#e2e8f0; }
+.dd-item svg { width:14px; height:14px; flex-shrink:0; }
+.dd-item .dd-desc { font-size:9px; color:#475569; display:block; margin-top:1px; }
+.dd-sep { height:1px; background:#0f3460; margin:2px 0; }
+#importInput { display:none; }
+
+/* Reset confirm banner */
+#reset-confirm {
+  position:absolute; top:14px; left:50%; transform:translateX(-50%);
+  background:#2d0a0a; border:1px solid #dc2626; border-radius:8px;
+  padding:8px 14px; z-index:200; white-space:nowrap;
+  display:none; align-items:center; gap:10px; pointer-events:all;
+  box-shadow:0 4px 20px rgba(0,0,0,0.5);
+}
+#reset-confirm.visible { display:flex; }
+#reset-confirm span { font-size:12px; color:#fca5a5; }
+#reset-confirm button { font-size:11px; padding:3px 10px; border-radius:5px; cursor:pointer; border:1px solid; }
+#reset-confirm .rc-yes { background:#7f1d1d; border-color:#dc2626; color:#fca5a5; }
+#reset-confirm .rc-yes:hover { background:#991b1b; }
+#reset-confirm .rc-no  { background:#1e293b; border-color:#334155; color:#94a3b8; }
+#reset-confirm .rc-no:hover  { background:#0f172a; }
+
+/* Toast */
+#toast { position:fixed; bottom:34px; left:50%; transform:translateX(-50%); background:#1e3a5f; border:1px solid #3b82f6; color:#60a5fa; padding:7px 16px; border-radius:8px; font-size:12px; opacity:0; transition:opacity 0.2s; pointer-events:none; z-index:9999; white-space:nowrap; }
+#toast.show { opacity:1; }
+
+/* Stamp modal */
+#stamp-modal {
+  display:none; position:fixed; inset:0; z-index:5000;
+  background:rgba(0,0,0,0.6); backdrop-filter:blur(3px);
+  align-items:center; justify-content:center;
+}
+#stamp-modal.open { display:flex; }
+#stamp-box {
+  background:#16213e; border:1px solid #0f3460; border-radius:12px;
+  padding:20px 24px; width:360px; max-width:96vw;
+  box-shadow:0 20px 60px rgba(0,0,0,0.6);
+}
+#stamp-box h3 { font-size:13px; font-weight:600; color:#e2e8f0; margin-bottom:4px; }
+#stamp-box p  { font-size:10px; color:#475569; margin-bottom:14px; }
+.stamp-presets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+.stamp-preset {
+  background:#1e293b; border:1px solid #0f3460; border-radius:6px;
+  color:#94a3b8; font-size:11px; padding:4px 10px; cursor:pointer; transition:all 0.1s;
+}
+.stamp-preset:hover { background:#0f3460; border-color:#3b82f6; color:#60a5fa; }
+.stamp-preset.active { background:#0f3460; border-color:#3b82f6; color:#60a5fa; }
+#stamp-custom-wrap { display:flex; gap:6px; margin-bottom:12px; }
+#stamp-custom {
+  flex:1; background:#1e293b; border:1px solid #0f3460; border-radius:6px;
+  color:#e2e8f0; font-size:12px; padding:6px 10px; outline:none;
+}
+#stamp-custom:focus { border-color:#3b82f6; }
+.stamp-style-row { display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; align-items:center; }
+.stamp-style-row label { font-size:10px; color:#64748b; }
+.stamp-style-row select, .stamp-style-row input[type=color] {
+  background:#1e293b; border:1px solid #0f3460; border-radius:5px;
+  color:#94a3b8; font-size:11px; padding:3px 6px; cursor:pointer;
+}
+.stamp-style-row input[type=color] { width:28px; height:24px; padding:2px; }
+.stamp-style-row input[type=range] { width:70px; accent-color:#3b82f6; }
+#stamp-preview-wrap { margin-bottom:14px; }
+#stamp-preview-label { font-size:9px; color:#475569; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:4px; }
+#stamp-preview-canvas { width:100%; height:70px; border-radius:6px; border:1px solid #0f3460; display:block; }
+.stamp-btn-row { display:flex; justify-content:flex-end; gap:8px; }
+.stamp-btn {
+  background:#1e3a5f; border:1px solid #0f3460; border-radius:6px;
+  color:#94a3b8; font-size:12px; padding:6px 14px; cursor:pointer; transition:all 0.1s;
+}
+.stamp-btn:hover { border-color:#3b82f6; color:#e2e8f0; }
+.stamp-btn.primary { background:#0f3460; border-color:#3b82f6; color:#60a5fa; }
+.stamp-btn.primary:hover { background:#1e4a8f; }
+.stamp-btn.danger { border-color:#7f1d1d; color:#f87171; }
+.stamp-btn.danger:hover { background:#2c0a0a; }
+
+/* Floating selection context bar */
+#sel-bar {
+  display:none; position:absolute; z-index:100;
+  background:#16213e; border:1px solid #0f3460; border-radius:8px;
+  padding:5px 8px; gap:5px; align-items:center; flex-wrap:wrap;
+  box-shadow:0 4px 20px rgba(0,0,0,0.5); pointer-events:all;
+  transform:translateX(-50%);
+}
+#sel-bar.visible { display:flex; }
+#sel-bar .sb-label { font-size:9px; color:#475569; text-transform:uppercase; letter-spacing:0.08em; }
+#sel-bar .sb-swatch { width:18px; height:18px; border-radius:3px; border:2px solid transparent; cursor:pointer; flex-shrink:0; transition:border-color 0.1s; }
+#sel-bar .sb-swatch:hover { border-color:#60a5fa; }
+#sel-bar input[type=color] { width:24px; height:20px; border:1px solid #0f3460; border-radius:3px; cursor:pointer; background:transparent; padding:1px; }
+#sel-bar .sb-sep { width:1px; height:20px; background:#0f3460; }
+#sel-bar button { background:#1e3a5f; border:1px solid #0f3460; border-radius:5px; color:#94a3b8; font-size:11px; padding:3px 7px; cursor:pointer; white-space:nowrap; transition:all 0.1s; display:flex; align-items:center; gap:3px; }
+#sel-bar button:hover { background:#0f3460; color:#e2e8f0; border-color:#3b82f6; }
+#sel-bar button svg { width:13px; height:13px; }
+#sel-bar .rot-val { font-size:10px; color:#60a5fa; min-width:34px; text-align:center; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <div style="display:flex;flex-direction:column;margin-right:4px;flex-shrink:0">
+    <span id="appTitle">⬡ DrawPad Arch <span style="font-size:9px;font-weight:400;color:#3b82f6;letter-spacing:0.05em">v1.0</span></span>
+    <span id="appSubtitle">Architecture Diagrammer</span>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:2px;margin-right:4px;flex-shrink:0">
+    <span style="font-size:9px;color:#475569;letter-spacing:0.04em;white-space:nowrap">Creator: <span style="color:#64748b;font-weight:500">AR</span></span>
+    <span style="font-size:9px;color:#166534;background:#052e16;border:1px solid #166534;border-radius:3px;padding:0px 5px;letter-spacing:0.04em;white-space:nowrap">✦ Free Use</span>
+  </div>
+  <div class="tool-sep"></div>
+
+  <button class="tool" id="iconPanelBtn" onclick="toggleIconPanel()" title="Icon Library (I)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Icons
+  </button>
+  <div class="tool-sep"></div>
+
+  <div class="tool-group">
+    <button class="tool" id="tool-select" title="Select (V)" onclick="setTool('select')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-7 1-4 7z"/></svg> Select
+    </button>
+    <button class="tool active" id="tool-pen" title="Pen (P)" onclick="setTool('pen')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg> Pen
+    </button>
+    <button class="tool" id="tool-line" title="Line (L)" onclick="setTool('line')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"/></svg> Line
+    </button>
+    <button class="tool" id="tool-rect" title="Rectangle (R)" onclick="setTool('rect')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg> Rect
+    </button>
+    <button class="tool" id="tool-ellipse" title="Ellipse (E)" onclick="setTool('ellipse')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="6"/></svg> Ellipse
+    </button>
+    <button class="tool" id="tool-arrow" title="Arrow (A)" onclick="setTool('arrow')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg> Arrow
+    </button>
+    <button class="tool" id="tool-text" title="Text (T)" onclick="setTool('text')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg> Text
+    </button>
+    <button class="tool" id="tool-eraser" title="Eraser (X)" onclick="setTool('eraser')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7L3 16l10-10 7 7-2.5 2.5"/><path d="M6 11l7 7"/></svg> Eraser
+    </button>
+  </div>
+  <div class="tool-sep"></div>
+
+  <div class="tool-group">
+    <span class="tool-label">Color</span>
+    <div class="color-swatch active" style="background:#e2e8f0" data-color="#e2e8f0" onclick="setColor(this)"></div>
+    <div class="color-swatch" style="background:#f87171" data-color="#f87171" onclick="setColor(this)"></div>
+    <div class="color-swatch" style="background:#fb923c" data-color="#fb923c" onclick="setColor(this)"></div>
+    <div class="color-swatch" style="background:#facc15" data-color="#facc15" onclick="setColor(this)"></div>
+    <div class="color-swatch" style="background:#4ade80" data-color="#4ade80" onclick="setColor(this)"></div>
+    <div class="color-swatch" style="background:#60a5fa" data-color="#60a5fa" onclick="setColor(this)"></div>
+    <div class="color-swatch" style="background:#c084fc" data-color="#c084fc" onclick="setColor(this)"></div>
+    <input type="color" id="customColor" value="#e2e8f0" onchange="setCustomColor(this.value)">
+  </div>
+  <div class="tool-sep"></div>
+
+  <div class="tool-group" style="gap:5px">
+    <span class="tool-label">Size</span>
+    <input type="range" id="strokeSize" min="1" max="40" value="3" style="width:60px" oninput="strokeWidth=+this.value;document.getElementById('strokeVal').textContent=this.value">
+    <span id="strokeVal" style="font-size:11px;color:#94a3b8;min-width:16px">3</span>
+    <span class="tool-label" style="margin-left:4px">Opacity</span>
+    <input type="range" id="opacitySlider" min="0.05" max="1" step="0.05" value="1" style="width:50px" oninput="globalOpacity=+this.value">
+    <span class="tool-label" style="margin-left:4px">Fill</span>
+    <select class="tool-select" onchange="fillMode=this.value">
+      <option value="none">None</option><option value="solid">Solid</option><option value="hachure">Hachure</option>
+    </select>
+    <span class="tool-label" style="margin-left:4px">Line</span>
+    <select class="tool-select" onchange="lineStyle=this.value">
+      <option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option>
+    </select>
+  </div>
+  <div class="tool-sep"></div>
+
+  <div class="tool-group">
+    <button class="tool" onclick="undo()" title="Undo Ctrl+Z"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3"/></svg></button>
+    <button class="tool" onclick="redo()" title="Redo Ctrl+Y"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3"/></svg></button>
+    <button class="tool" onclick="promptReset()" id="resetBtn" title="Reset canvas — clears everything">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg> Reset
+    </button>
+
+    <div class="dropdown-wrap" id="saveDropdown">
+      <button class="tool" onclick="toggleDD('saveDropdown',event)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Save ▾
+      </button>
+      <div class="dropdown-menu">
+        <div class="dd-header">Image</div>
+        <button class="dd-item" onclick="exportPNG();closeDD()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg><span>PNG<span class="dd-desc">Lossless image</span></span></button>
+        <button class="dd-item" onclick="exportJPEG();closeDD()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg><span>JPEG<span class="dd-desc">Smaller file size</span></span></button>
+        <div class="dd-sep"></div>
+        <div class="dd-header">Code</div>
+        <button class="dd-item" onclick="exportSVG();closeDD()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span>SVG<span class="dd-desc">Scalable vector</span></span></button>
+        <button class="dd-item" onclick="exportJSON();closeDD()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>JSON<span class="dd-desc">Raw shape data</span></span></button>
+        <div class="dd-sep"></div>
+        <div class="dd-header">DrawPad Arch</div>
+        <button class="dd-item" onclick="exportDPD();closeDD()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg><span>.dparch file<span class="dd-desc">Reopen &amp; edit later</span></span></button>
+      </div>
+    </div>
+
+    <button class="tool" onclick="document.getElementById('importInput').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Open
+    </button>
+    <input type="file" id="importInput" accept=".dparch,.dpd,.json" onchange="importFile(event)">
+
+    <button class="tool" onclick="toggleGrid()" id="gridBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/></svg> Grid</button>
+    <button class="tool" onclick="toggleDark()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg></button>
+    <button class="tool" id="stampBtn" onclick="openStampModal()" title="Add canvas stamp">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11V6a3 3 0 0 1 6 0v5"/><path d="M5 11h14l1 9H4z"/><line x1="12" y1="15" x2="12" y2="17"/></svg> Stamp
+    </button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="icon-panel">
+    <div id="panel-header">
+      <div id="panel-title">Icon Library</div>
+      <div class="tab-bar" id="tabBar"></div>
+      <input type="text" id="icon-search" placeholder="Search icons…" oninput="onSearch(this.value)">
+    </div>
+    <div id="icon-scroll"></div>
+
+    <!-- Bottom strip — always visible, never pushed off screen -->
+    <div id="panel-bottom">
+      <div id="icon-size-wrap">
+        <span>Icon size</span>
+        <input type="range" id="iconSizeSlider" min="64" max="200" value="96" step="8" oninput="iconDropSize=+this.value;document.getElementById('iconSizeVal').textContent=this.value+'px'">
+        <span id="iconSizeVal">96px</span>
+      </div>
+
+      <!-- Online icon search — optional, network-dependent -->
+      <div id="online-search-section" class="collapsed">
+        <div id="online-search-header" onclick="toggleOnlineSearch()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span class="os-title">Search Online</span>
+          <span class="os-badge">Iconify</span>
+          <span class="os-chevron">▾</span>
+        </div>
+        <div id="online-search-body">
+          <div id="online-search-input-wrap">
+            <input type="text" id="online-search-input" placeholder="e.g. aws s3, azure blob…"
+              onkeydown="if(event.key==='Enter') doOnlineSearch()">
+            <button id="online-search-btn" onclick="doOnlineSearch()">Search</button>
+          </div>
+          <div id="online-results">
+            <div class="os-status">Type a query and press Search</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="canvas-wrap">
+    <canvas id="canvas"></canvas>
+    <div id="selectionBox"></div>
+    <div id="place-hint">🖱 Click canvas to place • Esc to cancel</div>
+    <div id="reset-confirm">
+      <span>⚠ Reset canvas — this cannot be undone</span>
+      <button class="rc-yes" onclick="doReset()">Reset</button>
+      <button class="rc-no"  onclick="closeResetConfirm()">Cancel</button>
+    </div>
+
+    <!-- Floating context bar shown when shapes are selected -->
+    <div id="sel-bar">
+      <span class="sb-label">Color</span>
+      <div class="sb-swatch" style="background:#e2e8f0" onclick="applyColorToSelection('#e2e8f0')"></div>
+      <div class="sb-swatch" style="background:#f87171" onclick="applyColorToSelection('#f87171')"></div>
+      <div class="sb-swatch" style="background:#fb923c" onclick="applyColorToSelection('#fb923c')"></div>
+      <div class="sb-swatch" style="background:#facc15" onclick="applyColorToSelection('#facc15')"></div>
+      <div class="sb-swatch" style="background:#4ade80" onclick="applyColorToSelection('#4ade80')"></div>
+      <div class="sb-swatch" style="background:#60a5fa" onclick="applyColorToSelection('#60a5fa')"></div>
+      <div class="sb-swatch" style="background:#c084fc" onclick="applyColorToSelection('#c084fc')"></div>
+      <input type="color" id="selColorPicker" value="#e2e8f0" oninput="applyColorToSelection(this.value)" title="Custom color">
+      <button id="resetIconColorBtn" onclick="resetIconColor()" title="Reset icon to original colours" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        Original
+      </button>
+      <div class="sb-sep"></div>
+      <span class="sb-label">Rotate</span>
+      <button onclick="rotateSelection(-15)" title="Rotate -15°">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 2v6h6"/><path d="M2.66 15.57a10 10 0 1 0 .57-8.38"/></svg>
+        -15°
+      </button>
+      <span class="rot-val" id="rotVal">0°</span>
+      <button onclick="rotateSelection(15)" title="Rotate +15°">
+        +15°
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6"/><path d="M21.34 15.57a10 10 0 1 1-.57-8.38"/></svg>
+      </button>
+      <button onclick="rotateSelection(90)" title="Rotate 90°">90°</button>
+      <button onclick="setSelectionRotation(0)" title="Reset rotation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        Reset
+      </button>
+    </div>
+
+    <div id="status">x: 0, y: 0</div>
+    <div id="shortcuts">
+      <span class="kbd">I</span> Icons &nbsp;
+      <span class="kbd">V</span> Select &nbsp;
+      <span class="kbd">P</span> Pen &nbsp;
+      <span class="kbd">L</span> Line &nbsp;
+      <span class="kbd">R</span> Rect &nbsp;
+      <span class="kbd">E</span> Ellipse &nbsp;
+      <span class="kbd">A</span> Arrow &nbsp;
+      <span class="kbd">T</span> Text &nbsp;
+      <span class="kbd">Ctrl+S</span> Save &nbsp;
+      <span class="kbd">[</span><span class="kbd">]</span> Rotate &nbsp;
+      <span class="kbd">Scroll</span> Zoom
+    </div>
+  </div>
+</div>
+
+<!-- Stamp modal -->
+<div id="stamp-modal" onclick="if(event.target===this)closeStampModal()">
+  <div id="stamp-box">
+    <h3>Canvas Stamp</h3>
+    <p>Adds a watermark-style label across the entire canvas. Choose a preset or type your own.</p>
+
+    <div class="stamp-presets">
+      <button class="stamp-preset" onclick="selectPreset(this,'CONCEPTUAL')">Conceptual</button>
+      <button class="stamp-preset" onclick="selectPreset(this,'DRAFT')">Draft</button>
+      <button class="stamp-preset" onclick="selectPreset(this,'WIP')">WIP</button>
+      <button class="stamp-preset" onclick="selectPreset(this,'FOR REVIEW')">For Review</button>
+      <button class="stamp-preset" onclick="selectPreset(this,'APPROVED')">Approved</button>
+      <button class="stamp-preset" onclick="selectPreset(this,'TRANSITIONAL')">Transitional</button>
+      <button class="stamp-preset" onclick="selectPreset(this,'CONFIDENTIAL')">Confidential</button>
+      <button class="stamp-preset" onclick="selectPreset(this,'DEPRECATED')">Deprecated</button>
+      <button class="stamp-preset" onclick="selectPreset(this,'PRODUCTION')">Production</button>
+      <button class="stamp-preset" onclick="selectPreset(this,'PROPOSED')">Proposed</button>
+    </div>
+
+    <div id="stamp-custom-wrap">
+      <input type="text" id="stamp-custom" placeholder="Or type custom text…" maxlength="40"
+        oninput="clearPresetActive();updateStampPreview()" onkeydown="if(event.key==='Enter')applyStamp()">
+    </div>
+
+    <div class="stamp-style-row">
+      <label>Color</label>
+      <input type="color" id="stamp-color" value="#3b82f6" oninput="updateStampPreview()">
+      <label>Opacity</label>
+      <input type="range" id="stamp-opacity" min="0.04" max="0.5" step="0.02" value="0.18" oninput="updateStampPreview()">
+      <label>Style</label>
+      <select id="stamp-style" onchange="updateStampPreview()">
+        <option value="diagonal">Diagonal</option>
+        <option value="horizontal">Horizontal</option>
+        <option value="corner-br">Corner (BR)</option>
+        <option value="corner-tl">Corner (TL)</option>
+        <option value="tiled">Tiled</option>
+      </select>
+      <label>Border</label>
+      <input type="checkbox" id="stamp-border" onchange="updateStampPreview()" checked>
+    </div>
+
+    <div id="stamp-preview-wrap">
+      <div id="stamp-preview-label">Preview</div>
+      <canvas id="stamp-preview-canvas" height="70"></canvas>
+    </div>
+
+    <div class="stamp-btn-row">
+      <button class="stamp-btn danger" onclick="clearStamp()" id="clearStampBtn" style="margin-right:auto;display:none">Remove Stamp</button>
+      <button class="stamp-btn" onclick="closeStampModal()">Cancel</button>
+      <button class="stamp-btn primary" onclick="applyStamp()">Apply Stamp</button>
+    </div>
+  </div>
+</div>
+
+<textarea id="textInput" style="position:fixed;display:none;background:#1e293b;color:#e2e8f0;border:2px solid #3b82f6;border-radius:4px;font-size:18px;padding:6px;outline:none;resize:none;min-width:120px;z-index:500;font-family:inherit;"></textarea>
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════
+// BUNDLED ICONS — fully offline, zero network fetches required
+// Format: [key, label]  — key maps into BUNDLED_ICONS[key]
+// ═══════════════════════════════════════
+const BUNDLED_ICONS = {
+  "azure:portal": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"2\" width=\"9\" height=\"9\" rx=\"1.5\"/><rect x=\"13\" y=\"2\" width=\"9\" height=\"9\" rx=\"1.5\"/><rect x=\"2\" y=\"13\" width=\"9\" height=\"9\" rx=\"1.5\"/><rect x=\"13\" y=\"13\" width=\"9\" height=\"9\" rx=\"1.5\"/></svg>",
+  "azure:vm": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"5\" width=\"20\" height=\"14\" rx=\"2\"/><line x1=\"8\" y1=\"19\" x2=\"8\" y2=\"22\"/><line x1=\"16\" y1=\"19\" x2=\"16\" y2=\"22\"/><line x1=\"5\" y1=\"22\" x2=\"19\" y2=\"22\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/></svg>",
+  "azure:server": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"3\" width=\"20\" height=\"5\" rx=\"1\"/><rect x=\"2\" y=\"10\" width=\"20\" height=\"5\" rx=\"1\"/><rect x=\"2\" y=\"17\" width=\"20\" height=\"5\" rx=\"1\"/><circle cx=\"18\" cy=\"5.5\" r=\"1\"/><circle cx=\"18\" cy=\"12.5\" r=\"1\"/><circle cx=\"18\" cy=\"19.5\" r=\"1\"/></svg>",
+  "azure:container": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"/><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"/></svg>",
+  "azure:sqldb": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"/><path d=\"M21 12c0 1.66-4 3-9 3s-9-1.34-9-3\"/><path d=\"M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5\"/></svg>",
+  "azure:cosmosdb": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"/><path d=\"M21 12c0 1.66-4 3-9 3s-9-1.34-9-3\"/><path d=\"M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/></svg>",
+  "azure:storage": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z\"/><polyline points=\"3 9 12 15 21 9\"/></svg>",
+  "azure:cloud": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z\"/></svg>",
+  "azure:cloudflow": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z\"/><polyline points=\"8 15 12 11 16 15\"/></svg>",
+  "azure:keyvault": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"/></svg>",
+  "azure:firewall": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"/><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"16\"/><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"/></svg>",
+  "azure:vnet": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"2\" width=\"8\" height=\"8\" rx=\"1\"/><rect x=\"14\" y=\"2\" width=\"8\" height=\"8\" rx=\"1\"/><rect x=\"8\" y=\"14\" width=\"8\" height=\"8\" rx=\"1\"/><line x1=\"6\" y1=\"10\" x2=\"6\" y2=\"14\"/><line x1=\"18\" y1=\"10\" x2=\"18\" y2=\"14\"/><line x1=\"6\" y1=\"14\" x2=\"12\" y2=\"14\"/><line x1=\"18\" y1=\"14\" x2=\"12\" y2=\"14\"/></svg>",
+  "azure:dns": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z\"/></svg>",
+  "azure:loadbal": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"12\" y1=\"3\" x2=\"12\" y2=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/><line x1=\"12\" y1=\"15\" x2=\"5\" y2=\"21\"/><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"21\"/><line x1=\"12\" y1=\"15\" x2=\"19\" y2=\"21\"/></svg>",
+  "azure:monitor": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"22 12 18 12 15 21 9 3 6 12 2 12\"/></svg>",
+  "azure:bot": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\"/><circle cx=\"12\" cy=\"5\" r=\"2\"/><line x1=\"12\" y1=\"7\" x2=\"12\" y2=\"11\"/><circle cx=\"8\" cy=\"16\" r=\"1.5\" stroke-width=\"2\"/><circle cx=\"16\" cy=\"16\" r=\"1.5\" stroke-width=\"2\"/></svg>",
+  "azure:aiml": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 2a10 10 0 0 1 0 20\"/><path d=\"M12 2a10 10 0 0 0 0 20\"/><circle cx=\"12\" cy=\"12\" r=\"4\"/><line x1=\"2\" y1=\"12\" x2=\"8\" y2=\"12\"/><line x1=\"16\" y1=\"12\" x2=\"22\" y2=\"12\"/></svg>",
+  "azure:sync": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"23 4 23 10 17 10\"/><polyline points=\"1 20 1 14 7 14\"/><path d=\"M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15\"/></svg>",
+  "azure:logicapp": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/><path d=\"M9 9h.01\"/><path d=\"M15 9h.01\"/><path d=\"M9 13a4 4 0 0 0 6 0\"/></svg>",
+  "azure:functions": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10 12.5 8 15H5l3.5-6L5 3h3l2 4.5m0 5l2 2.5H17l-3.5-6L17 3h-3l-2 4.5\"/></svg>",
+  "azure:aad": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/></svg>",
+  "azure:tenant": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/><polyline points=\"9 22 9 12 15 12 15 22\"/></svg>",
+  "azure:appsvc": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"3\" width=\"20\" height=\"14\" rx=\"2\"/><line x1=\"8\" y1=\"21\" x2=\"16\" y2=\"21\"/><line x1=\"12\" y1=\"17\" x2=\"12\" y2=\"21\"/></svg>",
+  "azure:analytics": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/></svg>",
+  "azure:servicebus": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.06 3.4 2 2 0 0 1 3.03 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z\"/></svg>",
+  "azure:search": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"/></svg>",
+  "azure:secrets": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4\"/></svg>",
+  "azure:devops": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"23 4 23 10 17 10\"/><path d=\"M20.49 15a9 9 0 1 1-.49-3\"/></svg>",
+  "aws:logo": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6.76 16.45c-.5.29-.78.72-.78 1.28v2.6c0 .54.28.97.78 1.27l4.48 2.59c.5.29 1.07.29 1.56 0l4.48-2.59c.5-.3.78-.73.78-1.27v-2.6c0-.56-.28-.99-.78-1.28l-4.48-2.59a1.56 1.56 0 0 0-1.56 0z\"/><path d=\"M3 7.5v9l7.76 4.5 7.76-4.5v-9L10.76 3z\" fill=\"none\"/></svg>",
+  "aws:ec2": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"5\" width=\"20\" height=\"14\" rx=\"2\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/><line x1=\"12\" y1=\"5\" x2=\"12\" y2=\"2\"/><line x1=\"12\" y1=\"19\" x2=\"12\" y2=\"22\"/></svg>",
+  "aws:ecs": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/></svg>",
+  "aws:lambda": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10 12.5 8 15H5l3.5-6L5 3h3l2 4.5m0 5l2 2.5H17l-3.5-6L17 3h-3l-2 4.5\"/></svg>",
+  "aws:s3": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z\"/><polyline points=\"3 9 12 15 21 9\"/></svg>",
+  "aws:rds": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"/><path d=\"M21 12c0 1.66-4 3-9 3s-9-1.34-9-3\"/><path d=\"M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5\"/></svg>",
+  "aws:dynamodb": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"/><path d=\"M21 12c0 1.66-4 3-9 3s-9-1.34-9-3\"/><path d=\"M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/></svg>",
+  "aws:glacier": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z\"/><polyline points=\"9 14 12 11 15 14\"/></svg>",
+  "aws:cloudfront": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z\"/></svg>",
+  "aws:elb": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"12\" y1=\"3\" x2=\"12\" y2=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/><line x1=\"12\" y1=\"15\" x2=\"5\" y2=\"21\"/><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"21\"/><line x1=\"12\" y1=\"15\" x2=\"19\" y2=\"21\"/></svg>",
+  "aws:iam": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/></svg>",
+  "aws:waf": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"/><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"16\"/><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"/></svg>",
+  "aws:vpc": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"2\" width=\"8\" height=\"8\" rx=\"1\"/><rect x=\"14\" y=\"2\" width=\"8\" height=\"8\" rx=\"1\"/><rect x=\"8\" y=\"14\" width=\"8\" height=\"8\" rx=\"1\"/><line x1=\"6\" y1=\"10\" x2=\"6\" y2=\"14\"/><line x1=\"18\" y1=\"10\" x2=\"18\" y2=\"14\"/><line x1=\"6\" y1=\"14\" x2=\"12\" y2=\"14\"/><line x1=\"18\" y1=\"14\" x2=\"12\" y2=\"14\"/></svg>",
+  "aws:route53": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z\"/></svg>",
+  "aws:sqs": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"22\" y1=\"12\" x2=\"2\" y2=\"12\"/><path d=\"M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"/></svg>",
+  "aws:sns": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.06 3.4 2 2 0 0 1 3.03 1h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z\"/></svg>",
+  "aws:cloudwatch": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"22 12 18 12 15 21 9 3 6 12 2 12\"/></svg>",
+  "aws:codepipeline": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"23 4 23 10 17 10\"/><path d=\"M20.49 15a9 9 0 1 1-.49-3\"/></svg>",
+  "aws:sagemaker": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\"/><circle cx=\"12\" cy=\"5\" r=\"2\"/><line x1=\"12\" y1=\"7\" x2=\"12\" y2=\"11\"/><circle cx=\"8\" cy=\"16\" r=\"1.5\" stroke-width=\"2\"/><circle cx=\"16\" cy=\"16\" r=\"1.5\" stroke-width=\"2\"/></svg>",
+  "aws:bedrock": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 2a10 10 0 0 1 0 20\"/><path d=\"M12 2a10 10 0 0 0 0 20\"/><circle cx=\"12\" cy=\"12\" r=\"4\"/><line x1=\"2\" y1=\"12\" x2=\"8\" y2=\"12\"/><line x1=\"16\" y1=\"12\" x2=\"22\" y2=\"12\"/></svg>",
+  "aws:cognito": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><line x1=\"17\" y1=\"11\" x2=\"23\" y2=\"11\"/><line x1=\"20\" y1=\"8\" x2=\"20\" y2=\"14\"/></svg>",
+  "aws:redshift": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/></svg>",
+  "aws:kinesis": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polygon points=\"23 7 16 12 23 17 23 7\"/><rect x=\"1\" y=\"5\" width=\"15\" height=\"14\" rx=\"2\"/></svg>",
+  "aws:kms": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4\"/></svg>",
+  "aws:amplify": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"3\" width=\"20\" height=\"14\" rx=\"2\"/><line x1=\"8\" y1=\"21\" x2=\"16\" y2=\"21\"/><line x1=\"12\" y1=\"17\" x2=\"12\" y2=\"21\"/></svg>",
+  "gcp:logo": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M8 12l2.5 2.5L16 9\"/></svg>",
+  "gcp:compute": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"5\" width=\"20\" height=\"14\" rx=\"2\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/><line x1=\"12\" y1=\"5\" x2=\"12\" y2=\"2\"/><line x1=\"12\" y1=\"19\" x2=\"12\" y2=\"22\"/></svg>",
+  "gcp:storage": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z\"/><polyline points=\"3 9 12 15 21 9\"/></svg>",
+  "gcp:functions": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10 12.5 8 15H5l3.5-6L5 3h3l2 4.5m0 5l2 2.5H17l-3.5-6L17 3h-3l-2 4.5\"/></svg>",
+  "gcp:cloudrun": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z\"/><polyline points=\"10 8 16 12 10 16 10 8\"/></svg>",
+  "gcp:gke": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/></svg>",
+  "gcp:cloudsql": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"/><path d=\"M21 12c0 1.66-4 3-9 3s-9-1.34-9-3\"/><path d=\"M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5\"/></svg>",
+  "gcp:bigquery": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/><circle cx=\"18\" cy=\"8\" r=\"2\"/></svg>",
+  "gcp:firebase": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5.29 14.2L8.43 3.23a.5.5 0 0 1 .93-.05l2.19 4.39 1.6-3a.5.5 0 0 1 .89.02l4.37 9.13L12 21z\"/></svg>",
+  "gcp:iam": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"/></svg>",
+  "gcp:vpc": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"2\" width=\"8\" height=\"8\" rx=\"1\"/><rect x=\"14\" y=\"2\" width=\"8\" height=\"8\" rx=\"1\"/><rect x=\"8\" y=\"14\" width=\"8\" height=\"8\" rx=\"1\"/><line x1=\"6\" y1=\"10\" x2=\"6\" y2=\"14\"/><line x1=\"18\" y1=\"10\" x2=\"18\" y2=\"14\"/><line x1=\"6\" y1=\"14\" x2=\"12\" y2=\"14\"/><line x1=\"18\" y1=\"14\" x2=\"12\" y2=\"14\"/></svg>",
+  "gcp:dns": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z\"/></svg>",
+  "gcp:monitoring": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"22 12 18 12 15 21 9 3 6 12 2 12\"/></svg>",
+  "gcp:vertexai": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 2a10 10 0 0 1 0 20\"/><path d=\"M12 2a10 10 0 0 0 0 20\"/><circle cx=\"12\" cy=\"12\" r=\"4\"/><line x1=\"2\" y1=\"12\" x2=\"8\" y2=\"12\"/><line x1=\"16\" y1=\"12\" x2=\"22\" y2=\"12\"/></svg>",
+  "gcp:tasks": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"22\" y1=\"12\" x2=\"2\" y2=\"12\"/><path d=\"M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"/></svg>",
+  "gcp:loadbal": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"12\" y1=\"3\" x2=\"12\" y2=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/><line x1=\"12\" y1=\"15\" x2=\"5\" y2=\"21\"/><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"21\"/><line x1=\"12\" y1=\"15\" x2=\"19\" y2=\"21\"/></svg>",
+  "gcp:spanner": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"/><path d=\"M21 12c0 1.66-4 3-9 3s-9-1.34-9-3\"/><path d=\"M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5\"/><polyline points=\"9 10 12 13 15 10\"/></svg>",
+  "gcp:dialogflow": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z\"/><circle cx=\"9\" cy=\"10\" r=\"1.5\" stroke-width=\"2\"/><circle cx=\"12\" cy=\"10\" r=\"1.5\" stroke-width=\"2\"/><circle cx=\"15\" cy=\"10\" r=\"1.5\" stroke-width=\"2\"/></svg>",
+  "net:router": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"8\" width=\"20\" height=\"8\" rx=\"2\"/><line x1=\"6\" y1=\"8\" x2=\"4\" y2=\"4\"/><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"3\"/><line x1=\"18\" y1=\"8\" x2=\"20\" y2=\"4\"/><circle cx=\"6\" cy=\"12\" r=\"1.5\" stroke-width=\"2\"/><circle cx=\"12\" cy=\"12\" r=\"1.5\" stroke-width=\"2\"/><circle cx=\"18\" cy=\"12\" r=\"1.5\" stroke-width=\"2\"/></svg>",
+  "net:server": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"3\" width=\"20\" height=\"5\" rx=\"1\"/><rect x=\"2\" y=\"10\" width=\"20\" height=\"5\" rx=\"1\"/><rect x=\"2\" y=\"17\" width=\"20\" height=\"5\" rx=\"1\"/><circle cx=\"18\" cy=\"5.5\" r=\"1.5\" stroke-width=\"2\"/><circle cx=\"18\" cy=\"12.5\" r=\"1.5\" stroke-width=\"2\"/><circle cx=\"18\" cy=\"19.5\" r=\"1.5\" stroke-width=\"2\"/></svg>",
+  "net:rack": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"5\" y=\"2\" width=\"14\" height=\"20\" rx=\"1\"/><rect x=\"7\" y=\"5\" width=\"10\" height=\"2\" rx=\"0.5\"/><rect x=\"7\" y=\"9\" width=\"10\" height=\"2\" rx=\"0.5\"/><rect x=\"7\" y=\"13\" width=\"10\" height=\"2\" rx=\"0.5\"/><rect x=\"7\" y=\"17\" width=\"10\" height=\"2\" rx=\"0.5\"/></svg>",
+  "net:nas": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><rect x=\"6\" y=\"8\" width=\"12\" height=\"4\" rx=\"1\"/><circle cx=\"17\" cy=\"10\" r=\"1.5\" stroke-width=\"2\"/><line x1=\"8\" y1=\"18\" x2=\"8\" y2=\"20\"/><line x1=\"16\" y1=\"18\" x2=\"16\" y2=\"20\"/></svg>",
+  "net:desktop": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"3\" width=\"20\" height=\"14\" rx=\"2\"/><line x1=\"8\" y1=\"21\" x2=\"16\" y2=\"21\"/><line x1=\"12\" y1=\"17\" x2=\"12\" y2=\"21\"/></svg>",
+  "net:laptop": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16\"/></svg>",
+  "net:network": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"5\" r=\"2\"/><circle cx=\"5\" cy=\"19\" r=\"2\"/><circle cx=\"19\" cy=\"19\" r=\"2\"/><line x1=\"12\" y1=\"7\" x2=\"5\" y2=\"17\"/><line x1=\"12\" y1=\"7\" x2=\"19\" y2=\"17\"/></svg>",
+  "net:cloud": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z\"/></svg>",
+  "net:vpn": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"/><line x1=\"8\" y1=\"11\" x2=\"16\" y2=\"11\"/><line x1=\"12\" y1=\"7\" x2=\"12\" y2=\"15\"/></svg>",
+  "net:dns": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z\"/></svg>",
+  "net:ipnet": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"2\" width=\"8\" height=\"8\" rx=\"1\"/><rect x=\"14\" y=\"2\" width=\"8\" height=\"8\" rx=\"1\"/><rect x=\"8\" y=\"14\" width=\"8\" height=\"8\" rx=\"1\"/><line x1=\"6\" y1=\"10\" x2=\"6\" y2=\"14\"/><line x1=\"18\" y1=\"10\" x2=\"18\" y2=\"14\"/><line x1=\"6\" y1=\"14\" x2=\"12\" y2=\"14\"/><line x1=\"18\" y1=\"14\" x2=\"12\" y2=\"14\"/></svg>",
+  "net:ethernet": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"11\" width=\"18\" height=\"6\" rx=\"1\"/><line x1=\"7\" y1=\"11\" x2=\"7\" y2=\"6\"/><line x1=\"12\" y1=\"11\" x2=\"12\" y2=\"4\"/><line x1=\"17\" y1=\"11\" x2=\"17\" y2=\"6\"/><circle cx=\"7\" cy=\"5\" r=\"1.5\" stroke-width=\"2\"/><circle cx=\"12\" cy=\"3\" r=\"1.5\" stroke-width=\"2\"/><circle cx=\"17\" cy=\"5\" r=\"1.5\" stroke-width=\"2\"/></svg>",
+  "net:wifi": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M1.42 9a16 16 0 0 1 21.16 0\"/><path d=\"M5 12.55a11 11 0 0 1 14.08 0\"/><path d=\"M10.54 16a3 3 0 0 1 2.92 0\"/><line x1=\"12\" y1=\"20\" x2=\"12.01\" y2=\"20\"/></svg>",
+  "net:bluetooth": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5\"/></svg>",
+  "net:printer": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"6 9 6 2 18 2 18 9\"/><path d=\"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2\"/><rect x=\"6\" y=\"14\" width=\"12\" height=\"8\"/></svg>",
+  "net:cctv": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z\"/><circle cx=\"12\" cy=\"13\" r=\"4\"/></svg>",
+  "net:firewall": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 2c0 0-8 3-8 10v5l8 5 8-5v-5c0-7-8-10-8-10z\"/><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"16\"/><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"/></svg>",
+  "net:switch": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"8\" width=\"20\" height=\"8\" rx=\"2\"/><line x1=\"6\" y1=\"9\" x2=\"6\" y2=\"5\"/><line x1=\"10\" y1=\"9\" x2=\"10\" y2=\"5\"/><line x1=\"14\" y1=\"9\" x2=\"14\" y2=\"5\"/><line x1=\"18\" y1=\"9\" x2=\"18\" y2=\"5\"/><circle cx=\"6\" cy=\"4\" r=\"1.5\" stroke-width=\"2\"/><circle cx=\"10\" cy=\"4\" r=\"1.5\" stroke-width=\"2\"/><circle cx=\"14\" cy=\"4\" r=\"1.5\" stroke-width=\"2\"/><circle cx=\"18\" cy=\"4\" r=\"1.5\" stroke-width=\"2\"/></svg>",
+  "net:ap": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M1.42 9a16 16 0 0 1 21.16 0\"/><path d=\"M5 12.55a11 11 0 0 1 14.08 0\"/><circle cx=\"12\" cy=\"17\" r=\"2\"/><line x1=\"12\" y1=\"19\" x2=\"12\" y2=\"22\"/></svg>",
+  "net:hub": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"3\"/><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"9\"/><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"22\"/><line x1=\"2\" y1=\"12\" x2=\"9\" y2=\"12\"/><line x1=\"15\" y1=\"12\" x2=\"22\" y2=\"12\"/><line x1=\"4.22\" y1=\"4.22\" x2=\"9.17\" y2=\"9.17\"/><line x1=\"14.83\" y1=\"14.83\" x2=\"19.78\" y2=\"19.78\"/></svg>",
+  "dev:docker": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M13 5h2v2h-2zm-3 0h2v2h-2zm-3 0h2v2H7zm-3 3h2v2H4zm3 0h2v2H7zm3 0h2v2h-2zm3 0h2v2h-2zm3 0h2v2h-2zM7 11h2v2H7zm3 0h2v2h-2zm3 0h2v2h-2z\"/><path d=\"M23 11c-.3-1.5-1.4-2.3-2.6-2.7L19 8l-.4 1.3c-.5.1-1 .4-1.4.7H2c-.2 2 .4 4.4 1.7 6 1.3 1.6 3.1 2.5 5.1 2.7 1.3.2 2.7.2 4-.1a7.4 7.4 0 0 0 3-1.4c.7-.6 1.3-1.3 1.7-2.1.3.1.7.2 1 .2 1.2 0 2.2-.5 2.7-1.5.3-.5.3-1.1.2-1.8h.6z\"/></svg>",
+  "dev:kubernetes": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 2l8.5 5v10L12 22 3.5 17V7z\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/><line x1=\"12\" y1=\"7\" x2=\"12\" y2=\"10\"/><line x1=\"16.33\" y1=\"9.5\" x2=\"13.73\" y2=\"11\"/><line x1=\"16.33\" y1=\"14.5\" x2=\"13.73\" y2=\"13\"/><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"17\"/><line x1=\"7.67\" y1=\"14.5\" x2=\"10.27\" y2=\"13\"/><line x1=\"7.67\" y1=\"9.5\" x2=\"10.27\" y2=\"11\"/></svg>",
+  "dev:terraform": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M15.5 2.1l5 2.9v5.8l-5-2.9zM2.5 5l5 2.9v5.8l-5-2.9zm6.5 3.8l5 2.9v5.8l-5-2.9zm6.5 7.7v5.8l-5-2.9v-5.8z\"/></svg>",
+  "dev:jenkins": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"10\" r=\"4\"/><path d=\"M6.5 20.3A9 9 0 0 0 12 21a9 9 0 0 0 5.5-.7\"/><circle cx=\"9\" cy=\"9\" r=\"1.5\" stroke-width=\"2\"/><circle cx=\"15\" cy=\"9\" r=\"1.5\" stroke-width=\"2\"/><path d=\"M9 12.5s1 1.5 3 1.5 3-1.5 3-1.5\"/></svg>",
+  "dev:github": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22\"/></svg>",
+  "dev:gitlab": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M22.65 14.39L12 22.13 1.35 14.39a.84.84 0 0 1-.3-.94l1.22-3.78 2.44-7.51A.42.42 0 0 1 4.82 2a.43.43 0 0 1 .58 0 .42.42 0 0 1 .11.18l2.44 7.49h8.1l2.44-7.51A.42.42 0 0 1 18.6 2a.43.43 0 0 1 .58 0 .42.42 0 0 1 .11.18l2.44 7.51L23 13.45a.84.84 0 0 1-.35.94z\"/></svg>",
+  "dev:prometheus": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><polyline points=\"8 15 12 8 16 15\"/><line x1=\"9.5\" y1=\"12\" x2=\"14.5\" y2=\"12\"/></svg>",
+  "dev:grafana": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"22\"/><circle cx=\"12\" cy=\"12\" r=\"4\"/></svg>",
+  "dev:elastic": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/><line x1=\"7\" y1=\"10\" x2=\"17\" y2=\"10\"/><line x1=\"7\" y1=\"14\" x2=\"17\" y2=\"14\"/></svg>",
+  "dev:redis": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><ellipse cx=\"12\" cy=\"6\" rx=\"9\" ry=\"3\"/><path d=\"M21 12c0 1.66-4 3-9 3s-9-1.34-9-3\"/><path d=\"M3 6v12c0 1.66 4 3 9 3s9-1.34 9-3V6\"/></svg>",
+  "dev:rabbitmq": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 7h-3V4a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v3H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zm-5 7h-2v2h-2v-2H9v-2h2v-2h2v2h2z\"/></svg>",
+  "dev:kafka": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"4\" r=\"2\"/><circle cx=\"4\" cy=\"12\" r=\"2\"/><circle cx=\"20\" cy=\"12\" r=\"2\"/><circle cx=\"12\" cy=\"20\" r=\"2\"/><line x1=\"12\" y1=\"6\" x2=\"4.8\" y2=\"10.4\"/><line x1=\"12\" y1=\"6\" x2=\"19.2\" y2=\"10.4\"/><line x1=\"5.6\" y1=\"13.4\" x2=\"11\" y2=\"18.2\"/><line x1=\"18.4\" y1=\"13.4\" x2=\"13\" y2=\"18.2\"/></svg>",
+  "dev:nginx": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polygon points=\"12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5\"/><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"22\"/><path d=\"M2 8.5L22 15.5\"/></svg>",
+  "dev:postgresql": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><ellipse cx=\"12\" cy=\"6\" rx=\"9\" ry=\"3\"/><path d=\"M21 12c0 1.66-4 3-9 3s-9-1.34-9-3\"/><path d=\"M3 6v12c0 1.66 4 3 9 3s9-1.34 9-3V6\"/><line x1=\"12\" y1=\"9\" x2=\"12\" y2=\"15\"/></svg>",
+  "dev:mongodb": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><ellipse cx=\"12\" cy=\"4\" rx=\"5\" ry=\"2\"/><path d=\"M17 4v7c0 4-2 8-5 11-3-3-5-7-5-11V4\"/><line x1=\"12\" y1=\"4\" x2=\"12\" y2=\"22\"/></svg>",
+  "dev:mysql": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"/><path d=\"M21 12c0 1.66-4 3-9 3s-9-1.34-9-3\"/><path d=\"M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5\"/><path d=\"M9 13l3-3 3 3\"/></svg>",
+  "dev:python": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 2C8 2 6 4 6 7v2h6v1H4.5C3 10 2 11 2 13v3c0 2 1.5 3 3 3h2v-2.5C7 15 8 14 10 14h4c1.5 0 2.5-1 2.5-2.5V7C16.5 4.5 15 2 12 2zm0 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2z\"/><path d=\"M12 22c4 0 6-2 6-5v-2h-6v-1h7.5c1.5 0 2.5-1 2.5-3v-3c0-2-1.5-3-3-3h-2v2.5C17 9 16 10 14 10h-4c-1.5 0-2.5 1-2.5 2.5V17c0 2.5 1.5 5 4.5 5zm0-3a1 1 0 1 1 0-2 1 1 0 0 1 0 2z\"/></svg>",
+  "dev:nodejs": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polygon points=\"12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5\"/><polyline points=\"7 10 12 13 17 10\"/><line x1=\"12\" y1=\"13\" x2=\"12\" y2=\"19\"/></svg>",
+  "dev:react": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"2.5\"/><ellipse cx=\"12\" cy=\"12\" rx=\"10\" ry=\"4\"/><ellipse cx=\"12\" cy=\"12\" rx=\"10\" ry=\"4\" transform=\"rotate(60 12 12)\"/><ellipse cx=\"12\" cy=\"12\" rx=\"10\" ry=\"4\" transform=\"rotate(120 12 12)\"/></svg>",
+  "dev:linux": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 2C8 2 6 6 6 10c0 2 .5 4 1.5 5.5-1 1-1.5 2-1.5 3 0 1.5 1 2.5 2.5 3h7c1.5-.5 2.5-1.5 2.5-3 0-1-.5-2-1.5-3C17.5 14 18 12 18 10c0-4-2-8-6-8z\"/><circle cx=\"9\" cy=\"9\" r=\"1.5\" stroke-width=\"2\"/><circle cx=\"15\" cy=\"9\" r=\"1.5\" stroke-width=\"2\"/><path d=\"M9 13s1 2 3 2 3-2 3-2\"/></svg>",
+  "gen:user": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"/><circle cx=\"12\" cy=\"7\" r=\"4\"/></svg>",
+  "gen:team": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/></svg>",
+  "gen:company": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/><polyline points=\"9 22 9 12 15 12 15 22\"/></svg>",
+  "gen:laptop": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16\"/></svg>",
+  "gen:desktop": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"3\" width=\"20\" height=\"14\" rx=\"2\"/><line x1=\"8\" y1=\"21\" x2=\"16\" y2=\"21\"/><line x1=\"12\" y1=\"17\" x2=\"12\" y2=\"21\"/></svg>",
+  "gen:phone": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"5\" y=\"2\" width=\"14\" height=\"20\" rx=\"2\"/><line x1=\"12\" y1=\"18\" x2=\"12.01\" y2=\"18\"/></svg>",
+  "gen:tablet": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"4\" y=\"2\" width=\"16\" height=\"20\" rx=\"2\"/><line x1=\"12\" y1=\"18\" x2=\"12.01\" y2=\"18\"/></svg>",
+  "gen:internet": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><path d=\"M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z\"/></svg>",
+  "gen:security": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\"/><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"/></svg>",
+  "gen:shield": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"/></svg>",
+  "gen:key": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4\"/></svg>",
+  "gen:warning": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z\"/><line x1=\"12\" y1=\"9\" x2=\"12\" y2=\"13\"/><line x1=\"12\" y1=\"17\" x2=\"12.01\" y2=\"17\"/></svg>",
+  "gen:ok": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M22 11.08V12a10 10 0 1 1-5.93-9.14\"/><polyline points=\"22 4 12 14.01 9 11.01\"/></svg>",
+  "gen:error": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"15\" y1=\"9\" x2=\"9\" y2=\"15\"/><line x1=\"9\" y1=\"9\" x2=\"15\" y2=\"15\"/></svg>",
+  "gen:chart": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/></svg>",
+  "gen:doc": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><polyline points=\"14 2 14 8 20 8\"/><line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"/><line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"/><polyline points=\"10 9 9 9 8 9\"/></svg>",
+  "gen:folder": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z\"/></svg>",
+  "gen:email": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z\"/><polyline points=\"22,6 12,13 2,6\"/></svg>",
+  "gen:chat": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z\"/></svg>",
+  "gen:settings": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z\"/></svg>",
+  "gen:tools": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z\"/></svg>",
+  "gen:arrow": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"/><polyline points=\"12 5 19 12 12 19\"/></svg>",
+  "gen:clock": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><polyline points=\"12 6 12 12 16 14\"/></svg>",
+  "gen:calendar": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><line x1=\"16\" y1=\"2\" x2=\"16\" y2=\"6\"/><line x1=\"8\" y1=\"2\" x2=\"8\" y2=\"6\"/><line x1=\"3\" y1=\"10\" x2=\"21\" y2=\"10\"/></svg>",
+};
+
+const ICON_TABS = [
+  { id:'azure', label:'Azure'   },
+  { id:'aws',   label:'AWS'     },
+  { id:'gcp',   label:'GCP'     },
+  { id:'net',   label:'Network' },
+  { id:'dev',   label:'DevOps'  },
+  { id:'gen',   label:'General' },
+];
+
+// [bundled-key, display-label]
+const ICON_DATA = {
+  azure:[
+    ['azure:portal',     'Azure'],
+    ['azure:vm',         'VM'],
+    ['azure:server',     'Server'],
+    ['azure:container',  'Container'],
+    ['azure:sqldb',      'SQL DB'],
+    ['azure:cosmosdb',   'Cosmos DB'],
+    ['azure:storage',    'Storage'],
+    ['azure:cloud',      'Cloud'],
+    ['azure:cloudflow',  'Cloud Flow'],
+    ['azure:keyvault',   'Key Vault'],
+    ['azure:firewall',   'Firewall'],
+    ['azure:vnet',       'VNet'],
+    ['azure:dns',        'DNS'],
+    ['azure:loadbal',    'Load Bal.'],
+    ['azure:monitor',    'Monitor'],
+    ['azure:bot',        'Bot Svc'],
+    ['azure:aiml',       'AI / ML'],
+    ['azure:sync',       'Sync'],
+    ['azure:logicapp',   'Logic Apps'],
+    ['azure:functions',  'Functions'],
+    ['azure:aad',        'AAD'],
+    ['azure:tenant',     'Tenant'],
+    ['azure:appsvc',     'App Svc'],
+    ['azure:analytics',  'Analytics'],
+    ['azure:servicebus', 'Svc Bus'],
+    ['azure:search',     'Search'],
+    ['azure:secrets',    'Secrets'],
+    ['azure:devops',     'DevOps'],
+  ],
+  aws:[
+    ['aws:logo',         'AWS'],
+    ['aws:ec2',          'EC2'],
+    ['aws:ecs',          'ECS'],
+    ['aws:lambda',       'Lambda'],
+    ['aws:s3',           'S3'],
+    ['aws:rds',          'RDS'],
+    ['aws:dynamodb',     'DynamoDB'],
+    ['aws:glacier',      'Glacier'],
+    ['aws:cloudfront',   'CloudFront'],
+    ['aws:elb',          'ELB'],
+    ['aws:iam',          'IAM'],
+    ['aws:waf',          'WAF'],
+    ['aws:vpc',          'VPC'],
+    ['aws:route53',      'Route 53'],
+    ['aws:sqs',          'SQS'],
+    ['aws:sns',          'SNS'],
+    ['aws:cloudwatch',   'CloudWatch'],
+    ['aws:codepipeline', 'CodePipeline'],
+    ['aws:sagemaker',    'SageMaker'],
+    ['aws:bedrock',      'Bedrock'],
+    ['aws:cognito',      'Cognito'],
+    ['aws:redshift',     'Redshift'],
+    ['aws:kinesis',      'Kinesis'],
+    ['aws:kms',          'KMS'],
+    ['aws:amplify',      'Amplify'],
+  ],
+  gcp:[
+    ['gcp:logo',         'GCP'],
+    ['gcp:compute',      'Compute'],
+    ['gcp:storage',      'Storage'],
+    ['gcp:functions',    'Functions'],
+    ['gcp:cloudrun',     'Cloud Run'],
+    ['gcp:gke',          'GKE'],
+    ['gcp:cloudsql',     'Cloud SQL'],
+    ['gcp:bigquery',     'BigQuery'],
+    ['gcp:firebase',     'Firebase'],
+    ['gcp:iam',          'IAM'],
+    ['gcp:vpc',          'VPC'],
+    ['gcp:dns',          'DNS'],
+    ['gcp:monitoring',   'Monitoring'],
+    ['gcp:vertexai',     'Vertex AI'],
+    ['gcp:tasks',        'Tasks'],
+    ['gcp:loadbal',      'Load Bal.'],
+    ['gcp:spanner',      'Spanner'],
+    ['gcp:dialogflow',   'Dialogflow'],
+  ],
+  net:[
+    ['net:router',       'Router'],
+    ['net:server',       'Server'],
+    ['net:rack',         'Rack'],
+    ['net:nas',          'NAS'],
+    ['net:desktop',      'Desktop'],
+    ['net:laptop',       'Laptop'],
+    ['net:network',      'Network'],
+    ['net:cloud',        'Cloud'],
+    ['net:vpn',          'VPN'],
+    ['net:dns',          'DNS'],
+    ['net:ipnet',        'IP Net'],
+    ['net:ethernet',     'Ethernet'],
+    ['net:wifi',         'WiFi'],
+    ['net:bluetooth',    'Bluetooth'],
+    ['net:printer',      'Printer'],
+    ['net:cctv',         'CCTV'],
+    ['net:firewall',     'Firewall'],
+    ['net:switch',       'Switch'],
+    ['net:ap',           'AP'],
+    ['net:hub',          'Hub'],
+  ],
+  dev:[
+    ['dev:docker',       'Docker'],
+    ['dev:kubernetes',   'Kubernetes'],
+    ['dev:terraform',    'Terraform'],
+    ['dev:jenkins',      'Jenkins'],
+    ['dev:github',       'GitHub'],
+    ['dev:gitlab',       'GitLab'],
+    ['dev:prometheus',   'Prometheus'],
+    ['dev:grafana',      'Grafana'],
+    ['dev:elastic',      'Elastic'],
+    ['dev:redis',        'Redis'],
+    ['dev:rabbitmq',     'RabbitMQ'],
+    ['dev:kafka',        'Kafka'],
+    ['dev:nginx',        'Nginx'],
+    ['dev:postgresql',   'PostgreSQL'],
+    ['dev:mongodb',      'MongoDB'],
+    ['dev:mysql',        'MySQL'],
+    ['dev:python',       'Python'],
+    ['dev:nodejs',       'Node.js'],
+    ['dev:react',        'React'],
+    ['dev:linux',        'Linux'],
+  ],
+  gen:[
+    ['gen:user',         'User'],
+    ['gen:team',         'Team'],
+    ['gen:company',      'Company'],
+    ['gen:laptop',       'Laptop'],
+    ['gen:desktop',      'Desktop'],
+    ['gen:phone',        'Phone'],
+    ['gen:tablet',       'Tablet'],
+    ['gen:internet',     'Internet'],
+    ['gen:security',     'Security'],
+    ['gen:shield',       'Shield'],
+    ['gen:key',          'Key'],
+    ['gen:warning',      'Warning'],
+    ['gen:ok',           'OK'],
+    ['gen:error',        'Error'],
+    ['gen:chart',        'Chart'],
+    ['gen:doc',          'Doc'],
+    ['gen:folder',       'Folder'],
+    ['gen:email',        'Email'],
+    ['gen:chat',         'Chat'],
+    ['gen:settings',     'Settings'],
+    ['gen:tools',        'Tools'],
+    ['gen:arrow',        'Arrow'],
+    ['gen:clock',        'Clock'],
+    ['gen:calendar',     'Calendar'],
+  ],
+};
+// ═══════════════════════════════════════
+// CORE STATE
+// ═══════════════════════════════════════
+const canvas    = document.getElementById('canvas');
+const ctx       = canvas.getContext('2d');
+const wrap      = document.getElementById('canvas-wrap');
+const statusEl  = document.getElementById('status');
+const textInput = document.getElementById('textInput');
+const toastEl   = document.getElementById('toast');
+const placeHint = document.getElementById('place-hint');
+
+let currentTool = 'pen';
+let strokeColor = '#e2e8f0', strokeWidth = 3, fillMode = 'none', lineStyle = 'solid', globalOpacity = 1;
+let showGrid = false, darkBg = true;
+
+// Drawing state
+let isDrawing = false, startX = 0, startY = 0, currentPath = [];
+
+// Rotation interaction state
+let isRotating = false, rotateCenter = null, rotateStartAngle = 0, rotateShapeStart = 0;
+
+// Resize interaction state
+let isResizing = false, resizeHandleIdx = -1, resizeShapeSnap = null;
+
+// Shape store
+let shapes = [], undoStack = [], redoStack = [];
+let selectedShapes = [], selectionStart = null, dragOffset = null;
+
+// Viewport
+let zoom = 1, panX = 0, panY = 0, isPanning = false, panStart = null;
+
+// Text editing
+let editingText = null;
+
+// Icon panel
+let iconPanelOpen = false, activeTab = 'azure', searchVal = '';
+let placingIcon   = null;   // { svgStr, label, key } while user is picking placement
+let iconDropSize  = 96;
+let iconImgCache  = {};     // key[:color] -> HTMLImageElement (already loaded)
+
+// ═══════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════
+let toastTimer;
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2400);
+}
+function ts() { return Date.now(); }
+function dl(href, fn) { const a = document.createElement('a'); a.href = href; a.download = fn; a.click(); }
+
+// ─── Dropdown ────────────────────────
+function toggleDD(id, e) {
+  e.stopPropagation();
+  document.querySelectorAll('.dropdown-wrap').forEach(d => { if (d.id !== id) d.classList.remove('open'); });
+  document.getElementById(id).classList.toggle('open');
+}
+function closeDD() { document.querySelectorAll('.dropdown-wrap').forEach(d => d.classList.remove('open')); }
+document.addEventListener('click', closeDD);
+
+// ─── Resize canvas to fill wrap ──────
+function resize() {
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  if (w > 0 && h > 0) {
+    canvas.width  = w;
+    canvas.height = h;
+    redraw();
+  }
+}
+window.addEventListener('resize', resize);
+// Use ResizeObserver so panel open/close also triggers resize
+new ResizeObserver(resize).observe(wrap);
+
+// ═══════════════════════════════════════
+// TOOLS
+// ═══════════════════════════════════════
+function setTool(t) {
+  currentTool = t;
+  document.querySelectorAll('button.tool[id^="tool-"]').forEach(b => b.classList.remove('active'));
+  const el = document.getElementById('tool-' + t);
+  if (el) el.classList.add('active');
+  canvas.style.cursor = t === 'select' ? 'default' : t === 'eraser' ? 'cell' : 'crosshair';
+  if (editingText) finishText();
+  cancelPlacing();
+}
+function setColor(el) {
+  strokeColor = el.dataset.color;
+  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('customColor').value = strokeColor;
+  // If shapes are selected, apply color to them immediately
+  if (selectedShapes.length) applyColorToSelection(strokeColor);
+}
+function setCustomColor(v) {
+  strokeColor = v;
+  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+  if (selectedShapes.length) applyColorToSelection(v);
+}
+function toggleGrid() { showGrid = !showGrid; document.getElementById('gridBtn').classList.toggle('active', showGrid); redraw(); }
+function toggleDark() { darkBg = !darkBg; redraw(); }
+
+// ═══════════════════════════════════════
+// ICON PANEL
+// ═══════════════════════════════════════
+function toggleIconPanel() {
+  iconPanelOpen = !iconPanelOpen;
+  document.getElementById('icon-panel').classList.toggle('open', iconPanelOpen);
+  document.getElementById('iconPanelBtn').classList.toggle('active', iconPanelOpen);
+  if (iconPanelOpen) renderIconPanel();
+}
+
+// Build tabs once
+(function buildTabs() {
+  const bar = document.getElementById('tabBar');
+  ICON_TABS.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (t.id === activeTab ? ' active' : '');
+    btn.textContent = t.label;
+    btn.onclick = () => {
+      activeTab = t.id;
+      searchVal = '';
+      document.getElementById('icon-search').value = '';
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderIconPanel();
+    };
+    bar.appendChild(btn);
+  });
+})();
+
+function onSearch(v) { searchVal = v.toLowerCase().trim(); renderIconPanel(); }
+
+function renderIconPanel() {
+  const scroll = document.getElementById('icon-scroll');
+  scroll.innerHTML = '';
+
+  // New format: [key, label] — key indexes into BUNDLED_ICONS
+  let icons = searchVal
+    ? Object.values(ICON_DATA).flat().filter(([k, lbl]) =>
+        lbl.toLowerCase().includes(searchVal) || k.includes(searchVal))
+    : (ICON_DATA[activeTab] || []);
+
+  if (!icons.length) {
+    scroll.innerHTML = '<div class="icon-loading">No icons found</div>';
+    return;
+  }
+  if (searchVal) {
+    const lbl = document.createElement('div');
+    lbl.className = 'icon-section-label';
+    lbl.textContent = `${icons.length} result${icons.length !== 1 ? 's' : ''}`;
+    scroll.appendChild(lbl);
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'icon-grid';
+
+  icons.forEach(([key, label]) => {
+    const svgStr = BUNDLED_ICONS[key];
+    const cell = document.createElement('div');
+    cell.className = 'icon-cell';
+    cell.title = label;
+
+    const wrap2 = document.createElement('div');
+    wrap2.className = 'icon-wrap';
+
+    if (svgStr) {
+      // Render inline SVG directly — no network, instant
+      const coloured = svgStr.replace(/currentColor/g, '#94a3b8');
+      wrap2.innerHTML = coloured.replace('<svg', '<svg width="32" height="32"');
+    } else {
+      wrap2.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>`;
+      cell.title = label + ' (missing)';
+    }
+
+    const lbl2 = document.createElement('span');
+    lbl2.textContent = label;
+    cell.appendChild(wrap2);
+    cell.appendChild(lbl2);
+    grid.appendChild(cell);
+
+    cell.onclick = () => beginPlacing(key, label, cell);
+  });
+
+  scroll.appendChild(grid);
+}
+
+// Resolve SVG string for a key — always from bundle, never network
+function getIconSVG(key) {
+  return BUNDLED_ICONS[key] || null;
+}
+
+// Make an HTMLImageElement from an SVG string at a given pixel size
+function makeSVGImage(svgStr, size) {
+  return new Promise(resolve => {
+    // Only remove width/height from the opening <svg ...> tag, never from child elements
+    // The [\s\S]*? stops at the first > so we only touch the svg tag itself
+    const clean = svgStr.replace(
+      /^(<svg\b[^>]*?)\s+width="[^"]*"([^>]*?)\s+height="[^"]*"([^>]*?>)/,
+      '$1$2$3'
+    ).replace(
+      /^(<svg\b[^>]*?)\s+height="[^"]*"([^>]*?)\s+width="[^"]*"([^>]*?>)/,
+      '$1$2$3'
+    ).replace(
+      /^(<svg\b[^>]*?)\s+width="[^"]*"([^>]*?>)/,
+      '$1$2'
+    ).replace(
+      /^(<svg\b[^>]*?)\s+height="[^"]*"([^>]*?>)/,
+      '$1$2'
+    ).replace('<svg', `<svg width="${size}" height="${size}"`);
+    const blob = new Blob([clean], { type: 'image/svg+xml' });
+    const url  = URL.createObjectURL(blob);
+    const img  = new Image();
+    img.onload  = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
+// User clicked an icon cell — arm placing mode (instant, no network)
+function beginPlacing(key, label, cell) {
+  const svgStr = getIconSVG(key);
+  if (!svgStr) { toast(`"${label}" icon not found in bundle`); return; }
+
+  placingIcon = { key, svgStr, label };
+
+  // Pre-build canvas image in background
+  makeSVGImage(svgStr, iconDropSize).then(img => {
+    if (img) iconImgCache[key] = img;
+  });
+
+  document.querySelectorAll('.icon-cell').forEach(c => c.classList.remove('placing'));
+  cell.classList.add('placing');
+  placeHint.style.display = 'block';
+  canvas.style.cursor = 'copy';
+  toast(`"${label}" — click canvas to place`);
+}
+
+function cancelPlacing() {
+  placingIcon = null;
+  placeHint.style.display = 'none';
+  canvas.style.cursor = currentTool === 'select' ? 'default' : currentTool === 'eraser' ? 'cell' : 'crosshair';
+  document.querySelectorAll('.icon-cell, .os-icon-cell').forEach(c => c.classList.remove('placing'));
+}
+
+// ═══════════════════════════════════════
+// ONLINE ICON SEARCH (Iconify API — network required)
+// ═══════════════════════════════════════
+let onlineSearchCollapsed = true;
+let onlineFetchController  = null;   // AbortController for in-flight fetch
+const onlineCache = {};              // query -> results array
+
+function toggleOnlineSearch() {
+  const sec = document.getElementById('online-search-section');
+  onlineSearchCollapsed = !onlineSearchCollapsed;
+  sec.classList.toggle('collapsed', onlineSearchCollapsed);
+  if (!onlineSearchCollapsed) {
+    setTimeout(() => document.getElementById('online-search-input').focus(), 180);
+  }
+}
+
+async function doOnlineSearch() {
+  const input = document.getElementById('online-search-input');
+  const btn   = document.getElementById('online-search-btn');
+  const res   = document.getElementById('online-results');
+  const query = input.value.trim();
+  if (!query) return;
+
+  // Abort any previous in-flight fetch
+  if (onlineFetchController) onlineFetchController.abort();
+  onlineFetchController = new AbortController();
+
+  // Show loading state
+  btn.disabled = true;
+  btn.textContent = '…';
+  res.innerHTML = '<div class="os-status loading">Searching Iconify…</div>';
+
+  // Check cache first
+  if (onlineCache[query]) {
+    renderOnlineResults(onlineCache[query]);
+    btn.disabled = false;
+    btn.textContent = 'Search';
+    return;
+  }
+
+  try {
+    // Use Iconify search API — returns up to 32 icon names matching the query
+    const url = `https://api.iconify.design/search?query=${encodeURIComponent(query)}&limit=32`;
+    const r = await fetch(url, {
+      signal: onlineFetchController.signal,
+      mode: 'cors',
+    });
+
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+
+    if (!data.icons || !data.icons.length) {
+      res.innerHTML = '<div class="os-status">No results found</div>';
+      btn.disabled = false; btn.textContent = 'Search';
+      return;
+    }
+
+    // data.icons is ["mdi:router-network", "logos:docker-icon", ...]
+    const results = data.icons.map(id => {
+      const colon = id.indexOf(':');
+      return { id, set: id.slice(0, colon), name: id.slice(colon + 1) };
+    });
+
+    onlineCache[query] = results;
+    renderOnlineResults(results);
+
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    const msg = e.message.includes('403') || e.message.includes('Failed to fetch')
+      ? 'Network unavailable — check your connection'
+      : `Error: ${e.message}`;
+    res.innerHTML = `<div class="os-status error">${msg}</div>`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Search';
+}
+
+function renderOnlineResults(results) {
+  const res = document.getElementById('online-results');
+  res.innerHTML = '';
+
+  if (!results.length) {
+    res.innerHTML = '<div class="os-status">No results</div>';
+    return;
+  }
+
+  const count = document.createElement('div');
+  count.className = 'icon-section-label';
+  count.textContent = `${results.length} online result${results.length !== 1 ? 's' : ''}`;
+  res.appendChild(count);
+
+  results.forEach(({ id, set, name }) => {
+    const label = name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const cell  = document.createElement('div');
+    cell.className = 'os-icon-cell';
+    cell.title = `${label} (${set})`;
+
+    const preview = document.createElement('div');
+    preview.className = 'os-preview';
+    // Placeholder while SVG loads
+    preview.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>`;
+
+    const info = document.createElement('div');
+    info.className = 'os-info';
+    info.innerHTML = `<div class="os-name">${label}</div><div class="os-set">${set}</div>`;
+
+    // Colour dot — indicates if icon has colour info (logos set usually does)
+    const dot = document.createElement('div');
+    dot.className = 'os-color-dot';
+    dot.style.background = set === 'logos' ? '#f59e0b' : '#334155';
+    dot.title = set === 'logos' ? 'Coloured icon' : 'Monochrome icon';
+
+    cell.appendChild(preview);
+    cell.appendChild(info);
+    cell.appendChild(dot);
+    res.appendChild(cell);
+
+    // Fetch the SVG thumbnail for the preview (one per cell, small size)
+    fetchOnlineIconSVG(set, name).then(svgStr => {
+      if (!svgStr) return;
+      // Show as img in preview
+      const img = document.createElement('img');
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+        svgStr.replace(/\s+width="[^"]*"/g,'').replace(/\s+height="[^"]*"/g,'')
+              .replace('<svg', '<svg width="28" height="28"')
+      );
+      preview.innerHTML = '';
+      preview.appendChild(img);
+    });
+
+    // Click to arm placing
+    cell.onclick = () => beginPlacingOnline(id, set, name, label, cell);
+  });
+}
+
+// Fetch from Iconify — only used by online search, with proper caching
+const onlineSvgCache = {};
+
+async function fetchOnlineIconSVG(set, name) {
+  const key = set + ':' + name;
+  if (onlineSvgCache[key]) return onlineSvgCache[key];
+  if (onlineSvgCache[key] === null) return null;  // known failure
+
+  try {
+    const r = await fetch(`https://api.iconify.design/${set}/${name}.svg`, { mode: 'cors' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const txt = await r.text();
+    if (!txt.trim().startsWith('<svg')) throw new Error('not svg');
+    onlineSvgCache[key] = txt;
+    return txt;
+  } catch (e) {
+    onlineSvgCache[key] = null;
+    return null;
+  }
+}
+
+// Arm placing for an online-fetched icon
+function beginPlacingOnline(id, set, name, label, cell) {
+  // Clear any bundled-panel highlighting
+  document.querySelectorAll('.icon-cell').forEach(c => c.classList.remove('placing'));
+  document.querySelectorAll('.os-icon-cell').forEach(c => c.classList.remove('placing'));
+  cell.classList.add('placing');
+
+  const key = 'online:' + id;   // namespace online icons to avoid collision with bundled
+
+  fetchOnlineIconSVG(set, name).then(svgStr => {
+    if (!svgStr) {
+      cell.classList.remove('placing');
+      toast(`⚠ Could not fetch "${label}" — check your connection`);
+      return;
+    }
+
+    placingIcon = { key, svgStr, label };
+
+    // Pre-build canvas image
+    makeSVGImage(svgStr, iconDropSize).then(img => {
+      if (img) iconImgCache[key] = img;
+    });
+
+    placeHint.style.display = 'block';
+    canvas.style.cursor = 'copy';
+    toast(`"${label}" — click canvas to place`);
+  });
+}
+
+// Stamp icon at canvas coordinates (x,y) — fully synchronous so mousedown returns cleanly
+function stampIcon(x, y) {
+  if (!placingIcon) return;
+  const { key, svgStr, label } = placingIcon;
+  const size = iconDropSize;
+
+  // Use current toolbar colour as the icon colour (only if not default white)
+  const iconColor = (strokeColor && strokeColor !== '#e2e8f0') ? strokeColor : null;
+  const cacheKey  = iconColor ? key + ':' + iconColor : key;
+
+  const shape = {
+    type:      'icon',
+    x:         x - size / 2,
+    y:         y - size / 2,
+    size,
+    svgStr,
+    label,
+    key,
+    opacity:   globalOpacity,
+    rotation:  0,
+    iconColor, // null = original SVG colours
+  };
+
+  saveState();
+  shapes.push(shape);
+
+  // Pre-build coloured image in background; redraw when ready
+  if (!iconImgCache[cacheKey]) {
+    const svgToDraw = iconColor ? recolorSVG(svgStr, iconColor) : svgStr;
+    makeSVGImage(svgToDraw, size).then(img => {
+      if (img) { iconImgCache[cacheKey] = img; redraw(); }
+    });
+  }
+
+  redraw();
+  cancelPlacing();
+}
+
+// ═══════════════════════════════════════
+// DRAWING
+// ═══════════════════════════════════════
+function setDash(ls) {
+  if      (ls === 'dashed') ctx.setLineDash([8, 6]);
+  else if (ls === 'dotted') ctx.setLineDash([2, 5]);
+  else                      ctx.setLineDash([]);
+}
+
+// Return shape center for rotation pivot
+function getCenter(s) {
+  if (s.type === 'icon')   return { x: s.x + s.size/2, y: s.y + s.size/2 };
+  if (s.type === 'text')   return { x: s.x, y: s.y };
+  if (s.type === 'pen') {
+    const bb = getBBoxRaw(s); if (!bb) return {x:0,y:0};
+    return { x: bb.x + bb.w/2, y: bb.y + bb.h/2 };
+  }
+  return { x: (s.x1+s.x2)/2, y: (s.y1+s.y2)/2 };
+}
+
+// Get bbox ignoring rotation (raw shape coords)
+function getBBoxRaw(s) {
+  if (s.type === 'icon') return { x: s.x, y: s.y, w: s.size, h: s.size };
+  if (s.type === 'pen') {
+    if (!s.points || !s.points.length) return null;
+    let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+    s.points.forEach(p => { x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y); });
+    return { x:x0, y:y0, w:x1-x0||10, h:y1-y0||10 };
+  }
+  if (s.type === 'text') {
+    ctx.font = `${s.fontSize||18}px "Segoe UI",system-ui,sans-serif`;
+    const lines = s.text.split('\n');
+    const w = Math.max(10, ...lines.map(l => ctx.measureText(l).width));
+    return { x:s.x, y:s.y-(s.fontSize||18), w, h:(s.fontSize||18)*1.3*lines.length };
+  }
+  if (['line','arrow','rect','ellipse'].includes(s.type)) {
+    return { x:Math.min(s.x1,s.x2), y:Math.min(s.y1,s.y2), w:Math.abs(s.x2-s.x1)||10, h:Math.abs(s.y2-s.y1)||10 };
+  }
+  return null;
+}
+
+// Recolour an SVG string by replacing all fill/stroke colour values with a new colour.
+// Preserves 'none' and 'transparent' so icon shapes with no fill stay empty.
+function recolorSVG(svgStr, color) {
+  if (!svgStr || !color) return svgStr;
+
+  // 1. Replace inline fill/stroke attributes (e.g. fill="#005073" stroke="red")
+  //    Skip fill="none" and stroke="none"
+  let out = svgStr
+    .replace(/\bfill="(?!none|transparent)#?[0-9a-fA-F]{3,8}"/g,  `fill="${color}"`)
+    .replace(/\bfill="(?!none|transparent)(?:rgb|hsl)[^"]+"/g,     `fill="${color}"`)
+    .replace(/\bstroke="(?!none|transparent)#?[0-9a-fA-F]{3,8}"/g, `stroke="${color}"`)
+    .replace(/\bstroke="(?!none|transparent)(?:rgb|hsl)[^"]+"/g,   `stroke="${color}"`);
+
+  // 2. Replace fill/stroke inside style="" attributes
+  out = out
+    .replace(/(style="[^"]*)\bfill\s*:\s*(?!none|transparent)#?[0-9a-fA-F]{3,8}/g,  `$1fill:${color}`)
+    .replace(/(style="[^"]*)\bfill\s*:\s*(?!none|transparent)(?:rgb|hsl)[^;"]*/g,    `$1fill:${color}`)
+    .replace(/(style="[^"]*)\bstroke\s*:\s*(?!none|transparent)#?[0-9a-fA-F]{3,8}/g, `$1stroke:${color}`)
+    .replace(/(style="[^"]*)\bstroke\s*:\s*(?!none|transparent)(?:rgb|hsl)[^;"]*/g,  `$1stroke:${color}`);
+
+  // 3. Handle currentColor — replace with target colour
+  out = out.replace(/\bcurrentColor\b/g, color);
+
+  // 4. If the SVG has no explicit fill/stroke at all (e.g. path with implicit black fill),
+  //    inject a fill on the root <svg> element so it cascades down
+  if (!out.includes('fill=') && !out.includes('fill:')) {
+    out = out.replace('<svg', `<svg fill="${color}"`);
+  }
+
+  return out;
+}
+
+function drawShape(s, highlight) {
+  ctx.save();
+  ctx.globalAlpha = s.opacity ?? 1;
+
+  // Apply rotation around shape center
+  const rot = s.rotation || 0;
+  if (rot !== 0) {
+    const c = getCenter(s);
+    ctx.translate(c.x, c.y);
+    ctx.rotate(rot);
+    ctx.translate(-c.x, -c.y);
+  }
+
+  if (s.type === 'icon') {
+    // Use colour-keyed cache: "set:name:hexcolor" or "set:name" for original
+    const cacheKey = s.iconColor ? s.key + ':' + s.iconColor : s.key;
+    const img = iconImgCache[cacheKey];
+    if (img && img.complete && img.naturalWidth) {
+      ctx.drawImage(img, s.x, s.y, s.size, s.size);
+    } else {
+      // Fallback box while loading
+      ctx.strokeStyle = s.iconColor || '#334155'; ctx.lineWidth = 1.5; ctx.setLineDash([]);
+      ctx.strokeRect(s.x, s.y, s.size, s.size);
+      // Trigger async build
+      if (s.svgStr && !iconImgCache[cacheKey]) {
+        const svgToDraw = s.iconColor ? recolorSVG(s.svgStr, s.iconColor) : s.svgStr;
+        makeSVGImage(svgToDraw, s.size).then(img => {
+          if (img) { iconImgCache[cacheKey] = img; redraw(); }
+        });
+      }
+    }
+    ctx.globalAlpha = s.opacity ?? 1;
+
+    if (highlight) {
+      drawSelectionHandles(ctx, s);
+    }
+    ctx.restore(); return;
+  }
+
+  ctx.strokeStyle = s.color;
+  ctx.lineWidth   = s.width;
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
+  setDash(s.lineStyle || 'solid');
+
+  if (s.type === 'pen') {
+    if (s.points.length < 2) { ctx.restore(); return; }
+    ctx.beginPath();
+    ctx.moveTo(s.points[0].x, s.points[0].y);
+    s.points.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.stroke();
+  }
+  else if (s.type === 'line') {
+    ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+  }
+  else if (s.type === 'rect') {
+    const x = Math.min(s.x1, s.x2), y = Math.min(s.y1, s.y2);
+    const w = Math.abs(s.x2 - s.x1), h = Math.abs(s.y2 - s.y1);
+    ctx.beginPath(); ctx.rect(x, y, w, h);
+    if (s.fill === 'solid') { ctx.fillStyle = s.color; ctx.fill(); }
+    else if (s.fill === 'hachure') drawHachure(ctx, x, y, w, h, s.color, s.width);
+    ctx.stroke();
+  }
+  else if (s.type === 'ellipse') {
+    const cx = (s.x1 + s.x2) / 2, cy = (s.y1 + s.y2) / 2;
+    const rx = Math.abs(s.x2 - s.x1) / 2, ry = Math.abs(s.y2 - s.y1) / 2;
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    if (s.fill === 'solid') { ctx.fillStyle = s.color; ctx.fill(); }
+    ctx.stroke();
+  }
+  else if (s.type === 'arrow') {
+    ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+    drawArrowHead(s.x1, s.y1, s.x2, s.y2, s.width, s.color);
+  }
+  else if (s.type === 'text') {
+    ctx.font = `${s.fontSize || 18}px "Segoe UI",system-ui,sans-serif`;
+    ctx.fillStyle = s.color; ctx.setLineDash([]);
+    s.text.split('\n').forEach((ln, i) => ctx.fillText(ln, s.x, s.y + (s.fontSize || 18) * 1.3 * i));
+  }
+
+  if (highlight) {
+    drawSelectionHandles(ctx, s);
+  }
+  ctx.restore();
+}
+
+// ── Unified selection handles (resize corners/edges + rotate) ────────
+// Handle index layout (8 resize + 1 rotate):
+//  0──1──2
+//  3     4
+//  5──6──7
+//  (rotate = above handle 1)
+const HANDLE_R   = 5;    // radius of resize handle squares (half-size)
+const ROTATE_OFF = 22;   // px above top edge to rotate handle
+
+function getHandlePositions(bb) {
+  const { x, y, w, h } = bb;
+  const cx = x + w/2, cy = y + h/2;
+  return [
+    { x: x,      y: y      }, // 0 TL
+    { x: cx,     y: y      }, // 1 TM
+    { x: x+w,    y: y      }, // 2 TR
+    { x: x,      y: cy     }, // 3 ML
+    { x: x+w,    y: cy     }, // 4 MR
+    { x: x,      y: y+h    }, // 5 BL
+    { x: cx,     y: y+h    }, // 6 BM
+    { x: x+w,    y: y+h    }, // 7 BR
+  ];
+}
+
+// Cursor strings for each resize handle index
+const HANDLE_CURSORS = [
+  'nw-resize','n-resize','ne-resize',
+  'w-resize',            'e-resize',
+  'sw-resize','s-resize','se-resize',
+];
+
+function drawSelectionHandles(tc, s) {
+  const bb = getBBoxRaw(s);
+  if (!bb) return;
+  const pad = 6;
+  const bx = bb.x - pad, by = bb.y - pad, bw = bb.w + pad*2, bh = bb.h + pad*2;
+
+  tc.save();
+  tc.setLineDash([4, 3]);
+  tc.strokeStyle = '#3b82f6';
+  tc.lineWidth = 1.5 / zoom;
+  tc.strokeRect(bx, by, bw, bh);
+
+  // Rotate handle stem + circle
+  const hx = bb.x + bb.w/2;
+  const hy = by - ROTATE_OFF / zoom;
+  tc.setLineDash([]);
+  tc.strokeStyle = '#3b82f6';
+  tc.lineWidth = 1 / zoom;
+  tc.beginPath(); tc.moveTo(hx, by); tc.lineTo(hx, hy); tc.stroke();
+  tc.beginPath(); tc.arc(hx, hy, 6/zoom, 0, Math.PI*2);
+  tc.fillStyle = '#1e3a5f'; tc.fill();
+  tc.strokeStyle = '#60a5fa'; tc.stroke();
+
+  // 8 resize handles (filled squares)
+  const handles = getHandlePositions({ x: bx, y: by, w: bw, h: bh });
+  const hr = HANDLE_R / zoom;
+  tc.setLineDash([]);
+  tc.fillStyle = '#1e3a5f';
+  tc.strokeStyle = '#3b82f6';
+  tc.lineWidth = 1.2 / zoom;
+  handles.forEach(h => {
+    tc.beginPath();
+    tc.rect(h.x - hr, h.y - hr, hr*2, hr*2);
+    tc.fill(); tc.stroke();
+  });
+  tc.restore();
+}
+
+// Hit-test a resize handle — returns 0-7 or -1
+function hitResizeHandle(s, x, y) {
+  if (selectedShapes.length !== 1) return -1;
+  const bb = getBBoxRaw(s);
+  if (!bb) return -1;
+  const pad = 6;
+  const bx = bb.x - pad, by = bb.y - pad, bw = bb.w + pad*2, bh = bb.h + pad*2;
+  const handles = getHandlePositions({ x: bx, y: by, w: bw, h: bh });
+  const hr = (HANDLE_R + 3) / zoom;   // slightly larger hit zone
+  for (let i = 0; i < handles.length; i++) {
+    if (Math.abs(x - handles[i].x) <= hr && Math.abs(y - handles[i].y) <= hr) return i;
+  }
+  return -1;
+}
+
+// Apply resize: mutate shape s based on which handle is dragged to pos
+// idx:  0=TL 1=TM 2=TR  3=ML 4=MR  5=BL 6=BM 7=BR
+// constrain = shift key (or always true for icons = proportional)
+function applyResize(s, idx, pos, constrain) {
+  const snap = resizeShapeSnap;
+  if (!snap || !snap._bb) return;
+  const bb  = snap._bb;
+  const MIN = 20;   // minimum dimension in canvas units
+
+  // Which edges move for each handle:
+  // moveLeft:  handles 0,3,5   moveRight: handles 2,4,7
+  // moveTop:   handles 0,1,2   moveBottom: handles 5,6,7
+  const moveL = [0,3,5].includes(idx);
+  const moveR = [2,4,7].includes(idx);
+  const moveT = [0,1,2].includes(idx);
+  const moveB = [5,6,7].includes(idx);
+
+  let newX = bb.x, newY = bb.y, newW = bb.w, newH = bb.h;
+
+  if (moveL) { const dx = pos.x - bb.x; newX = bb.x + dx; newW = Math.max(MIN, bb.w - dx); }
+  if (moveR) { newW = Math.max(MIN, pos.x - bb.x); }
+  if (moveT) { const dy = pos.y - bb.y; newY = bb.y + dy; newH = Math.max(MIN, bb.h - dy); }
+  if (moveB) { newH = Math.max(MIN, pos.y - bb.y); }
+
+  // Proportional constraint: corner handles (or always for icons)
+  const isCorner = [0,2,5,7].includes(idx);
+  if ((constrain && isCorner) || s.type === 'icon') {
+    const aspect = bb.w / bb.h;
+    if (moveL || moveR) {
+      const desiredH = newW / aspect;
+      if (moveT) { newY = bb.y + bb.h - desiredH; }
+      newH = desiredH;
+    } else if (moveT || moveB) {
+      const desiredW = newH * aspect;
+      if (moveL) { newX = bb.x + bb.w - desiredW; }
+      newW = desiredW;
+    }
+  }
+
+  // Apply to shape
+  if (s.type === 'icon') {
+    // Icons use x,y,size (square) — take the larger dim for non-constrained edge drags
+    const newSize = Math.max(MIN, isCorner ? Math.max(newW, newH) : (moveL||moveR ? newW : newH));
+    s.x    = moveL ? (snap.x + snap.size - newSize) : snap.x;
+    s.y    = moveT ? (snap.y + snap.size - newSize) : snap.y;
+    s.size = newSize;
+    // Rebuild cached image at new size
+    const cacheKey = s.iconColor ? s.key + ':' + s.iconColor : s.key;
+    const baseSvg  = s.svgStr || BUNDLED_ICONS[s.key] || null;
+    if (baseSvg) {
+      const svgToDraw = s.iconColor ? recolorSVG(baseSvg, s.iconColor) : baseSvg;
+      makeSVGImage(svgToDraw, s.size).then(img => {
+        if (img) { iconImgCache[cacheKey] = img; redraw(); }
+      });
+    }
+  } else if (['rect','ellipse'].includes(s.type)) {
+    s.x1 = newX; s.y1 = newY;
+    s.x2 = newX + newW; s.y2 = newY + newH;
+  } else if (s.type === 'line' || s.type === 'arrow') {
+    // For line/arrow, resize by moving the endpoint that is closest to the handle
+    if (moveL || moveT) { s.x1 = snap.x1 + (newX - bb.x); s.y1 = snap.y1 + (newY - bb.y); }
+    if (moveR || moveB) { s.x2 = snap.x2 + (newW - bb.w); s.y2 = snap.y2 + (newH - bb.h); }
+  } else if (s.type === 'pen') {
+    // Scale all pen points from the bbox origin
+    const scaleX = newW / (bb.w || 1), scaleY = newH / (bb.h || 1);
+    s.points = snap.points.map(p => ({
+      x: newX + (p.x - bb.x) * scaleX,
+      y: newY + (p.y - bb.y) * scaleY,
+    }));
+  } else if (s.type === 'text') {
+    // Resize text by scaling fontSize proportionally to height change
+    const scale = newH / (bb.h || 1);
+    s.fontSize = Math.max(8, Math.round((snap.fontSize || 18) * scale));
+    s.x = newX; s.y = newY + s.fontSize;
+  }
+}
+
+function drawHachure(tc, x, y, w, h, color, lw) {
+  tc.save(); tc.strokeStyle = color; tc.lineWidth = Math.max(1, lw * 0.5);
+  const gap = Math.max(6, lw * 3);
+  tc.beginPath();
+  for (let i = x - h; i < x + w; i += gap) { tc.moveTo(i, y); tc.lineTo(i + h, y + h); }
+  tc.stroke(); tc.restore();
+}
+
+function drawArrowHead(x1, y1, x2, y2, lw, color) {
+  const a = Math.atan2(y2 - y1, x2 - x1), sz = Math.max(10, lw * 4);
+  ctx.save(); ctx.fillStyle = color; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - sz * Math.cos(a - Math.PI / 7), y2 - sz * Math.sin(a - Math.PI / 7));
+  ctx.lineTo(x2 - sz * Math.cos(a + Math.PI / 7), y2 - sz * Math.sin(a + Math.PI / 7));
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+
+// getBBox returns the SCREEN-SPACE bbox accounting for rotation (expanded AABB)
+function getBBox(s) {
+  const bb = getBBoxRaw(s);
+  if (!bb) return null;
+  const rot = s.rotation || 0;
+  if (rot === 0) return bb;
+  // rotate all 4 corners around center, return new AABB
+  const cx = bb.x + bb.w/2, cy = bb.y + bb.h/2;
+  const corners = [[bb.x,bb.y],[bb.x+bb.w,bb.y],[bb.x+bb.w,bb.y+bb.h],[bb.x,bb.y+bb.h]];
+  const rx = corners.map(([px,py]) => {
+    const dx=px-cx,dy=py-cy;
+    return cx + dx*Math.cos(rot) - dy*Math.sin(rot);
+  });
+  const ry = corners.map(([px,py]) => {
+    const dx=px-cx,dy=py-cy;
+    return cy + dx*Math.sin(rot) + dy*Math.cos(rot);
+  });
+  const minX=Math.min(...rx),minY=Math.min(...ry),maxX=Math.max(...rx),maxY=Math.max(...ry);
+  return { x:minX, y:minY, w:maxX-minX, h:maxY-minY };
+}
+
+function hitTest(s, x, y) {
+  const rot = s.rotation || 0;
+  if (rot === 0) {
+    const bb = getBBoxRaw(s);
+    return bb && x >= bb.x-10 && x <= bb.x+bb.w+10 && y >= bb.y-10 && y <= bb.y+bb.h+10;
+  }
+  // Rotate test point into shape-local space
+  const c = getCenter(s);
+  const dx = x - c.x, dy = y - c.y;
+  const lx = dx*Math.cos(-rot) - dy*Math.sin(-rot) + c.x;
+  const ly = dx*Math.sin(-rot) + dy*Math.cos(-rot) + c.y;
+  const bb = getBBoxRaw(s);
+  return bb && lx >= bb.x-10 && lx <= bb.x+bb.w+10 && ly >= bb.y-10 && ly <= bb.y+bb.h+10;
+}
+
+// Check if point (x,y) is near the rotate handle of a selected shape
+function hitRotateHandle(s, x, y) {
+  const bb = getBBoxRaw(s);
+  if (!bb) return false;
+  const rot = s.rotation || 0;
+  const c = getCenter(s);
+  // Handle is at top-center of raw bbox, rotated
+  const hxRaw = bb.x + bb.w/2, hyRaw = bb.y - 6 - 18;
+  const dx = hxRaw - c.x, dy = hyRaw - c.y;
+  const hx = c.x + dx*Math.cos(rot) - dy*Math.sin(rot);
+  const hy = c.y + dx*Math.sin(rot) + dy*Math.cos(rot);
+  const dist = Math.hypot(x - hx, y - hy);
+  return dist <= 10 / zoom;
+}
+
+function drawGrid() {
+  const step = 60 * zoom, ox = panX % step, oy = panY % step;
+  ctx.save();
+  // Adaptive colour — visible on both dark and light backgrounds
+  ctx.strokeStyle = darkBg ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.1)';
+  ctx.lineWidth = 0.5;
+  for (let x = ox; x < canvas.width; x += step) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke(); }
+  for (let y = oy; y < canvas.height; y += step) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke(); }
+  // Draw slightly bolder lines every 5 cells (major grid)
+  const majorStep = step * 5, mox = panX % majorStep, moy = panY % majorStep;
+  ctx.strokeStyle = darkBg ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.18)';
+  ctx.lineWidth = 0.8;
+  for (let x = mox; x < canvas.width; x += majorStep) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke(); }
+  for (let y = moy; y < canvas.height; y += majorStep) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke(); }
+  ctx.restore();
+}
+
+function redraw() {
+  if (!canvas.width || !canvas.height) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = darkBg ? '#1a1a2e' : '#f8fafc';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (showGrid) drawGrid();
+  ctx.save();
+  ctx.translate(panX, panY);
+  ctx.scale(zoom, zoom);
+  shapes.forEach(s => drawShape(s, selectedShapes.includes(s)));
+  ctx.restore();
+  // Stamp always renders last, on top of everything, in screen space
+  if (canvasStamp) drawStampOnContext(ctx, canvas.width, canvas.height);
+}
+
+// ═══════════════════════════════════════
+// CANVAS EVENTS
+// ═══════════════════════════════════════
+function toCanvas(cx, cy) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (cx - r.left - panX) / zoom, y: (cy - r.top - panY) / zoom };
+}
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    isPanning = true; panStart = { x: e.clientX - panX, y: e.clientY - panY };
+    canvas.style.cursor = 'grabbing'; return;
+  }
+
+  const pos = toCanvas(e.clientX, e.clientY);
+
+  // Icon placement — highest priority, hard stop
+  if (placingIcon) {
+    stampIcon(pos.x, pos.y);
+    isDrawing = false;
+    return;
+  }
+
+  if (currentTool === 'text') {
+    if (editingText) finishText();
+    startTextInput(pos.x, pos.y, e.clientX, e.clientY);
+    return;
+  }
+
+  if (currentTool === 'select') {
+    // Check resize handles first (only on already-selected single shape)
+    if (selectedShapes.length === 1) {
+      const s = selectedShapes[0];
+      const rhi = hitResizeHandle(s, pos.x, pos.y);
+      if (rhi !== -1) {
+        isResizing = true;
+        resizeHandleIdx = rhi;
+        // Snapshot the shape's bbox and full data at drag start
+        resizeShapeSnap = { ...JSON.parse(JSON.stringify(s)), _bb: getBBoxRaw(s) };
+        canvas.style.cursor = HANDLE_CURSORS[rhi];
+        return;
+      }
+      // Check rotate handle
+      if (hitRotateHandle(s, pos.x, pos.y)) {
+        isRotating = true;
+        rotateCenter = getCenter(s);
+        rotateStartAngle = Math.atan2(pos.y - rotateCenter.y, pos.x - rotateCenter.x);
+        rotateShapeStart = s.rotation || 0;
+        canvas.style.cursor = 'grabbing';
+        return;
+      }
+    }
+    const hit = [...shapes].reverse().find(s => hitTest(s, pos.x, pos.y));
+    if (hit) {
+      if (!selectedShapes.includes(hit)) selectedShapes = [hit];
+      dragOffset = { x: pos.x, y: pos.y };
+    } else {
+      selectedShapes = []; selectionStart = pos;
+    }
+    updateSelBar();
+    redraw(); return;
+  }
+
+  if (currentTool === 'eraser') {
+    shapes = shapes.filter(s => !hitTest(s, pos.x, pos.y)); redraw(); return;
+  }
+
+  // Drawing tools
+  isDrawing = true;
+  startX = pos.x; startY = pos.y;
+  if (currentTool === 'pen') currentPath = [{ x: pos.x, y: pos.y }];
+});
+
+canvas.addEventListener('mousemove', e => {
+  const pos = toCanvas(e.clientX, e.clientY);
+  statusEl.textContent = `x:${Math.round(pos.x)}  y:${Math.round(pos.y)}  zoom:${Math.round(zoom*100)}%`;
+
+  if (isPanning) { panX = e.clientX - panStart.x; panY = e.clientY - panStart.y; redraw(); return; }
+
+  // Rotation drag
+  if (isRotating && selectedShapes.length === 1) {
+    const s = selectedShapes[0];
+    const angle = Math.atan2(pos.y - rotateCenter.y, pos.x - rotateCenter.x);
+    s.rotation = rotateShapeStart + (angle - rotateStartAngle);
+    updateSelBar();
+    redraw(); return;
+  }
+
+  // Resize drag
+  if (isResizing && selectedShapes.length === 1) {
+    applyResize(selectedShapes[0], resizeHandleIdx, pos, e.shiftKey);
+    redraw(); return;
+  }
+
+  if (currentTool === 'select') {
+    // Update cursor when hovering handles
+    if (selectedShapes.length === 1 && !dragOffset) {
+      const s = selectedShapes[0];
+      const rhi = hitResizeHandle(s, pos.x, pos.y);
+      if (rhi !== -1) {
+        canvas.style.cursor = HANDLE_CURSORS[rhi];
+      } else if (hitRotateHandle(s, pos.x, pos.y)) {
+        canvas.style.cursor = 'grab';
+      } else {
+        canvas.style.cursor = 'default';
+      }
+    } else if (!dragOffset) {
+      canvas.style.cursor = 'default';
+    }
+
+    if (dragOffset && selectedShapes.length) {
+      const dx = pos.x - dragOffset.x, dy = pos.y - dragOffset.y;
+      selectedShapes.forEach(s => moveShape(s, dx, dy));
+      dragOffset = { x: pos.x, y: pos.y };
+      updateSelBar();
+      redraw();
+    } else if (selectionStart) {
+      const sx = Math.min(selectionStart.x, pos.x)*zoom+panX, sy = Math.min(selectionStart.y, pos.y)*zoom+panY;
+      const sw = Math.abs(pos.x-selectionStart.x)*zoom, sh = Math.abs(pos.y-selectionStart.y)*zoom;
+      const box = document.getElementById('selectionBox');
+      box.style.display='block'; box.style.left=sx+'px'; box.style.top=sy+'px'; box.style.width=sw+'px'; box.style.height=sh+'px';
+    }
+    return;
+  }
+
+  if (!isDrawing) return;
+
+  if (currentTool === 'eraser') {
+    shapes = shapes.filter(s => !hitTest(s, pos.x, pos.y)); redraw(); return;
+  }
+
+  if (currentTool === 'pen') {
+    currentPath.push({ x: pos.x, y: pos.y });
+    // Incremental draw for performance
+    if (currentPath.length >= 2) {
+      ctx.save(); ctx.translate(panX, panY); ctx.scale(zoom, zoom);
+      ctx.strokeStyle=strokeColor; ctx.lineWidth=strokeWidth; ctx.lineCap='round'; ctx.lineJoin='round';
+      ctx.globalAlpha=globalOpacity; setDash(lineStyle);
+      ctx.beginPath();
+      ctx.moveTo(currentPath[currentPath.length-2].x, currentPath[currentPath.length-2].y);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke(); ctx.restore();
+    }
+  } else {
+    // Live preview for shapes
+    redraw();
+    ctx.save(); ctx.translate(panX, panY); ctx.scale(zoom, zoom);
+    previewShape(startX, startY, pos.x, pos.y, e.shiftKey);
+    ctx.restore();
+  }
+});
+
+canvas.addEventListener('mouseup', e => {
+  if (isPanning) {
+    isPanning = false;
+    canvas.style.cursor = placingIcon ? 'copy' : currentTool === 'select' ? 'default' : 'crosshair';
+    return;
+  }
+
+  // End resize
+  if (isResizing) {
+    isResizing = false;
+    resizeHandleIdx = -1;
+    resizeShapeSnap = null;
+    saveState();
+    canvas.style.cursor = 'default';
+    redraw(); return;
+  }
+
+  // End rotation
+  if (isRotating) {
+    isRotating = false;
+    saveState();
+    canvas.style.cursor = 'default';
+    updateSelBar();
+    redraw(); return;
+  }
+
+  if (currentTool === 'select') {
+    if (selectionStart) {
+      const pos = toCanvas(e.clientX, e.clientY);
+      const x1=Math.min(selectionStart.x,pos.x), y1=Math.min(selectionStart.y,pos.y);
+      const x2=Math.max(selectionStart.x,pos.x), y2=Math.max(selectionStart.y,pos.y);
+      if (x2-x1 > 4 || y2-y1 > 4) {
+        selectedShapes = shapes.filter(s => {
+          const bb = getBBox(s);
+          return bb && bb.x>=x1-5 && bb.y>=y1-5 && bb.x+bb.w<=x2+5 && bb.y+bb.h<=y2+5;
+        });
+      }
+      document.getElementById('selectionBox').style.display = 'none';
+      selectionStart = null;
+    }
+    dragOffset = null;
+    updateSelBar();
+    redraw(); return;
+  }
+
+  if (!isDrawing) return;
+  isDrawing = false;
+
+  if (currentTool === 'pen') {
+    if (currentPath.length > 1) {
+      saveState();
+      shapes.push({ type:'pen', points:[...currentPath], color:strokeColor, width:strokeWidth, opacity:globalOpacity, lineStyle });
+    }
+    currentPath = [];
+    redraw();
+    return;
+  }
+
+  const pos = toCanvas(e.clientX, e.clientY);
+  let shape = null;
+  const dx = Math.abs(pos.x - startX), dy = Math.abs(pos.y - startY);
+
+  if (currentTool === 'line') {
+    shape = { type:'line', x1:startX, y1:startY,
+      x2: dx < 2 ? startX + 80 : pos.x,
+      y2: dy < 2 ? startY      : pos.y,
+      color:strokeColor, width:strokeWidth, opacity:globalOpacity, lineStyle };
+  }
+  else if (currentTool === 'rect') {
+    const ex = dx < 2 ? startX + 120 : pos.x;
+    const ey = dy < 2 ? startY + 80  : pos.y;
+    shape = { type:'rect', x1:startX, y1:startY, x2:ex, y2:ey,
+      color:strokeColor, width:strokeWidth, opacity:globalOpacity, fill:fillMode, lineStyle };
+  }
+  else if (currentTool === 'ellipse') {
+    const ex = dx < 2 ? startX + 100 : pos.x;
+    const ey = dy < 2 ? startY + 70  : pos.y;
+    shape = { type:'ellipse', x1:startX, y1:startY, x2:ex, y2:ey,
+      color:strokeColor, width:strokeWidth, opacity:globalOpacity, fill:fillMode, lineStyle };
+  }
+  else if (currentTool === 'arrow') {
+    shape = { type:'arrow', x1:startX, y1:startY,
+      x2: dx < 2 ? startX + 100 : pos.x,
+      y2: dy < 2 ? startY       : pos.y,
+      color:strokeColor, width:strokeWidth, opacity:globalOpacity, lineStyle };
+  }
+
+  if (shape) { saveState(); shapes.push(shape); }
+  redraw();
+});
+
+canvas.addEventListener('mouseleave', () => { if (isPanning) isPanning = false; });
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const d = e.deltaY > 0 ? 0.9 : 1.1;
+  const nz = Math.max(0.1, Math.min(8, zoom * d));
+  panX = e.clientX - (e.clientX - panX) * (nz / zoom);
+  panY = e.clientY - (e.clientY - panY) * (nz / zoom);
+  zoom = nz; redraw();
+}, { passive: false });
+
+canvas.addEventListener('dblclick', e => {
+  if (currentTool !== 'select') return;
+  const pos = toCanvas(e.clientX, e.clientY);
+  const hit = [...shapes].reverse().find(s => s.type === 'text' && hitTest(s, pos.x, pos.y));
+  if (hit) {
+    editingText = hit;
+    const rx = hit.x * zoom + panX + canvas.getBoundingClientRect().left;
+    const ry = (hit.y - (hit.fontSize||18)) * zoom + panY + canvas.getBoundingClientRect().top;
+    textInput.value = hit.text;
+    textInput.style.left = rx + 'px'; textInput.style.top = ry + 'px';
+    textInput.style.display = 'block'; textInput.style.fontSize = ((hit.fontSize||18)*zoom)+'px';
+    textInput.focus(); setTimeout(() => textInput.select(), 10);
+  }
+});
+
+// ─── Shape helpers ────────────────────
+function previewShape(x1, y1, x2, y2, shift) {
+  if (shift) {
+    if (['rect','ellipse'].includes(currentTool)) {
+      const d = Math.min(Math.abs(x2-x1), Math.abs(y2-y1));
+      x2 = x1 + Math.sign(x2-x1)*d; y2 = y1 + Math.sign(y2-y1)*d;
+    } else if (['line','arrow'].includes(currentTool)) {
+      const dx=x2-x1,dy=y2-y1,a=Math.round(Math.atan2(dy,dx)/(Math.PI/4))*(Math.PI/4),dist=Math.hypot(dx,dy);
+      x2=x1+dist*Math.cos(a); y2=y1+dist*Math.sin(a);
+    }
+  }
+  drawShape({ type:currentTool, x1,y1,x2,y2, color:strokeColor, width:strokeWidth, opacity:globalOpacity, fill:fillMode, lineStyle });
+}
+
+function moveShape(s, dx, dy) {
+  if (s.type === 'pen') s.points = s.points.map(p => ({ x:p.x+dx, y:p.y+dy }));
+  else if (s.type === 'text') { s.x += dx; s.y += dy; }
+  else if (s.type === 'icon') { s.x += dx; s.y += dy; }
+  else { s.x1+=dx; s.y1+=dy; s.x2+=dx; s.y2+=dy; }
+}
+
+// ─── Text ────────────────────────────
+function startTextInput(cx, cy, ex, ey) {
+  textInput.value = ''; textInput.style.left=ex+'px'; textInput.style.top=ey+'px';
+  textInput.style.display='block'; textInput.style.fontSize=(18*zoom)+'px'; textInput.style.color=strokeColor;
+  textInput.focus();
+  editingText = { type:'text', x:cx, y:cy+18, text:'', color:strokeColor, fontSize:18, opacity:globalOpacity };
+  shapes.push(editingText);
+}
+function finishText() {
+  if (!editingText) return;
+  const t = textInput.value.trim();
+  if (t) { editingText.text = t; saveState(); }
+  else shapes = shapes.filter(s => s !== editingText);
+  editingText = null; textInput.style.display='none'; textInput.value=''; redraw();
+}
+textInput.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { finishText(); }
+  else if (e.key === 'Enter' && !e.shiftKey) { finishText(); }
+  else if (editingText) { setTimeout(() => { if (editingText) { editingText.text = textInput.value; redraw(); } }, 0); }
+});
+
+// ═══════════════════════════════════════
+// SELECTION BAR — color + rotation
+// ═══════════════════════════════════════
+const selBar = document.getElementById('sel-bar');
+const rotVal = document.getElementById('rotVal');
+
+function updateSelBar() {
+  if (!selectedShapes.length) {
+    selBar.classList.remove('visible');
+    return;
+  }
+
+  // Position bar above the bounding box of all selected shapes (in screen coords)
+  let minX=Infinity, minY=Infinity, maxX=-Infinity;
+  selectedShapes.forEach(s => {
+    const bb = getBBox(s);
+    if (!bb) return;
+    // Convert to screen space
+    const sx = bb.x * zoom + panX;
+    const sy = bb.y * zoom + panY;
+    const ex = (bb.x + bb.w) * zoom + panX;
+    minX = Math.min(minX, sx); minY = Math.min(minY, sy);
+    maxX = Math.max(maxX, ex);
+  });
+
+  const barTop  = Math.max(8, minY - 54);   // above selection, but not off-screen
+  const barLeft = (minX + maxX) / 2;        // horizontally centred
+
+  selBar.style.top  = barTop  + 'px';
+  selBar.style.left = barLeft + 'px';
+  selBar.classList.add('visible');
+
+  // Show rotation degrees if single shape
+  if (selectedShapes.length === 1) {
+    const deg = Math.round(((selectedShapes[0].rotation || 0) * 180 / Math.PI) % 360);
+    rotVal.textContent = deg + '°';
+  } else {
+    rotVal.textContent = '—';
+  }
+
+  // Update the color picker to reflect the selected shape's color
+  if (selectedShapes.length === 1) {
+    const s = selectedShapes[0];
+    const col = s.type === 'icon' ? (s.iconColor || '#e2e8f0') : (s.color || '#e2e8f0');
+    document.getElementById('selColorPicker').value = col;
+  }
+  // Show "Original" reset button only when a single icon with a colour applied is selected
+  const resetBtn = document.getElementById('resetIconColorBtn');
+  if (selectedShapes.length === 1 && selectedShapes[0].type === 'icon') {
+    resetBtn.style.display = selectedShapes[0].iconColor ? 'flex' : 'none';
+  } else {
+    resetBtn.style.display = 'none';
+  }
+}
+function applyColorToSelection(color) {
+  if (!selectedShapes.length) return;
+  saveState();
+  selectedShapes.forEach(s => {
+    if (s.type === 'icon') {
+      s.iconColor = color;
+      // Build the recoloured image and cache it under key:color
+      const cacheKey = s.key + ':' + color;
+      if (!iconImgCache[cacheKey] && s.svgStr) {
+        const recoloured = recolorSVG(s.svgStr, color);
+        makeSVGImage(recoloured, s.size).then(img => {
+          if (img) { iconImgCache[cacheKey] = img; redraw(); }
+        });
+      }
+    } else {
+      s.color = color;
+    }
+  });
+  // Sync toolbar colour
+  strokeColor = color;
+  document.getElementById('customColor').value = color;
+  document.querySelectorAll('.color-swatch').forEach(sw => {
+    sw.classList.toggle('active', sw.dataset.color === color);
+  });
+  redraw();
+  updateSelBar();
+}
+
+// Reset icon colour back to original SVG colours
+function resetIconColor() {
+  if (!selectedShapes.length) return;
+  saveState();
+  selectedShapes.forEach(s => {
+    if (s.type === 'icon') {
+      s.iconColor = null;
+      // Ensure original (uncoloured) image is in cache
+      if (!iconImgCache[s.key] && s.svgStr) {
+        makeSVGImage(s.svgStr, s.size).then(img => {
+          if (img) { iconImgCache[s.key] = img; redraw(); }
+        });
+      }
+    }
+  });
+  redraw();
+  updateSelBar();
+}
+
+// Rotate selected shapes by deltaDeg degrees
+function rotateSelection(deltaDeg) {
+  if (!selectedShapes.length) return;
+  saveState();
+  const deltaRad = deltaDeg * Math.PI / 180;
+  selectedShapes.forEach(s => {
+    s.rotation = ((s.rotation || 0) + deltaRad);
+  });
+  redraw();
+  updateSelBar();
+}
+
+// Set absolute rotation in degrees
+function setSelectionRotation(deg) {
+  if (!selectedShapes.length) return;
+  saveState();
+  const rad = deg * Math.PI / 180;
+  selectedShapes.forEach(s => { s.rotation = rad; });
+  redraw();
+  updateSelBar();
+}
+
+// ═══════════════════════════════════════
+// UNDO / REDO / CLEAR
+// ═══════════════════════════════════════
+function saveState() { undoStack.push(JSON.stringify(shapes)); if (undoStack.length>80) undoStack.shift(); redoStack=[]; }
+function undo() { if (undoStack.length) { redoStack.push(JSON.stringify(shapes)); shapes=JSON.parse(undoStack.pop()); selectedShapes=[]; updateSelBar(); redraw(); } }
+function redo() { if (redoStack.length) { undoStack.push(JSON.stringify(shapes)); shapes=JSON.parse(redoStack.pop()); selectedShapes=[]; updateSelBar(); redraw(); } }
+
+function promptReset() {
+  document.getElementById('reset-confirm').classList.add('visible');
+}
+function closeResetConfirm() {
+  document.getElementById('reset-confirm').classList.remove('visible');
+}
+function doReset() {
+  closeResetConfirm();
+  // Full reset — shapes, viewport, stamp, undo history, selection
+  shapes        = [];
+  selectedShapes= [];
+  undoStack     = [];
+  redoStack     = [];
+  panX = 0; panY = 0; zoom = 1;
+  canvasStamp   = null;
+  document.getElementById('stampBtn').classList.remove('active');
+  iconImgCache  = {};
+  if (editingText) finishText();
+  cancelPlacing();
+  updateSelBar();
+  redraw();
+  toast('Canvas reset');
+}
+
+// ═══════════════════════════════════════
+// EXPORT / IMPORT
+// ═══════════════════════════════════════
+function renderOffscreen() {
+  const tmp = document.createElement('canvas');
+  tmp.width = canvas.width; tmp.height = canvas.height;
+  const tc = tmp.getContext('2d');
+  tc.fillStyle = darkBg ? '#1a1a2e' : '#f8fafc';
+  tc.fillRect(0, 0, tmp.width, tmp.height);
+  tc.save(); tc.translate(panX, panY); tc.scale(zoom, zoom);
+  shapes.forEach(s => {
+    tc.save(); tc.globalAlpha = s.opacity ?? 1;
+    if (s.type === 'icon') {
+      const cacheKey = s.iconColor ? s.key + ':' + s.iconColor : s.key;
+      const img = iconImgCache[cacheKey];
+      if (img && img.complete) tc.drawImage(img, s.x, s.y, s.size, s.size);
+      else { tc.strokeStyle = s.iconColor||'#334155'; tc.lineWidth=1; tc.strokeRect(s.x,s.y,s.size,s.size); }
+      tc.textAlign='left';
+    } else {
+      tc.strokeStyle=s.color; tc.fillStyle=s.color; tc.lineWidth=s.width; tc.lineCap='round'; tc.lineJoin='round';
+      if(s.lineStyle==='dashed')tc.setLineDash([8,6]);else if(s.lineStyle==='dotted')tc.setLineDash([2,5]);else tc.setLineDash([]);
+      if(s.type==='pen'){if(s.points.length<2){tc.restore();return;}tc.beginPath();tc.moveTo(s.points[0].x,s.points[0].y);s.points.slice(1).forEach(p=>tc.lineTo(p.x,p.y));tc.stroke();}
+      else if(s.type==='line'){tc.beginPath();tc.moveTo(s.x1,s.y1);tc.lineTo(s.x2,s.y2);tc.stroke();}
+      else if(s.type==='rect'){const x=Math.min(s.x1,s.x2),y=Math.min(s.y1,s.y2),w=Math.abs(s.x2-s.x1),h=Math.abs(s.y2-s.y1);tc.beginPath();tc.rect(x,y,w,h);if(s.fill==='solid')tc.fill();tc.stroke();}
+      else if(s.type==='ellipse'){const cx=(s.x1+s.x2)/2,cy=(s.y1+s.y2)/2,rx=Math.abs(s.x2-s.x1)/2,ry=Math.abs(s.y2-s.y1)/2;tc.beginPath();tc.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);if(s.fill==='solid')tc.fill();tc.stroke();}
+      else if(s.type==='arrow'){tc.beginPath();tc.moveTo(s.x1,s.y1);tc.lineTo(s.x2,s.y2);tc.stroke();const a=Math.atan2(s.y2-s.y1,s.x2-s.x1),sz=Math.max(10,s.width*4);tc.fillStyle=s.color;tc.setLineDash([]);tc.beginPath();tc.moveTo(s.x2,s.y2);tc.lineTo(s.x2-sz*Math.cos(a-Math.PI/7),s.y2-sz*Math.sin(a-Math.PI/7));tc.lineTo(s.x2-sz*Math.cos(a+Math.PI/7),s.y2-sz*Math.sin(a+Math.PI/7));tc.closePath();tc.fill();}
+      else if(s.type==='text'){tc.font=`${s.fontSize||18}px "Segoe UI",system-ui,sans-serif`;tc.fillStyle=s.color;tc.setLineDash([]);s.text.split('\n').forEach((ln,i)=>tc.fillText(ln,s.x,s.y+(s.fontSize||18)*1.3*i));}
+    }
+    tc.restore();
+  });
+  tc.restore();
+  // Draw stamp on top in export too
+  if (canvasStamp) drawStampOnContext(tc, tmp.width, tmp.height);
+  return tmp;
+}
+
+function exportPNG()  { dl(renderOffscreen().toDataURL('image/png'), 'drawpad-arch-'+ts()+'.png'); toast('Saved as PNG'); }
+function exportJPEG() { dl(renderOffscreen().toDataURL('image/jpeg',0.92), 'drawpad-arch-'+ts()+'.jpg'); toast('Saved as JPEG'); }
+
+function exportSVG() {
+  const w=canvas.width, h=canvas.height, bg=darkBg?'#1a1a2e':'#f8fafc';
+  let svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n<rect width="${w}" height="${h}" fill="${bg}"/>\n<g transform="translate(${panX.toFixed(1)},${panY.toFixed(1)}) scale(${zoom.toFixed(4)})">\n`;
+  const da=ls=>ls==='dashed'?' stroke-dasharray="8 6"':ls==='dotted'?' stroke-dasharray="2 5"':'';
+  shapes.forEach(s=>{
+    const op=s.opacity!=null&&s.opacity!==1?` opacity="${s.opacity.toFixed(2)}"`:''
+    const sw=`stroke="${s.color}" stroke-width="${s.width}" stroke-linecap="round" stroke-linejoin="round"`;
+    if(s.type==='icon'){ /* icon rendered as image in canvas export — skip in SVG */ return;}
+    if(s.type==='pen'){if(s.points.length<2)return;svg+=`<path d="M${s.points.map(p=>`${p.x.toFixed(1)},${p.y.toFixed(1)}`).join('L')}" fill="none" ${sw}${da(s.lineStyle)}${op}/>\n`;}
+    else if(s.type==='line'){svg+=`<line x1="${s.x1.toFixed(1)}" y1="${s.y1.toFixed(1)}" x2="${s.x2.toFixed(1)}" y2="${s.y2.toFixed(1)}" fill="none" ${sw}${da(s.lineStyle)}${op}/>\n`;}
+    else if(s.type==='rect'){const x=Math.min(s.x1,s.x2),y=Math.min(s.y1,s.y2),rw=Math.abs(s.x2-s.x1),rh=Math.abs(s.y2-s.y1);svg+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" fill="${s.fill==='solid'?s.color:'none'}" ${sw}${da(s.lineStyle)}${op}/>\n`;}
+    else if(s.type==='ellipse'){const cx=(s.x1+s.x2)/2,cy=(s.y1+s.y2)/2,rx=Math.abs(s.x2-s.x1)/2,ry=Math.abs(s.y2-s.y1)/2;svg+=`<ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="${s.fill==='solid'?s.color:'none'}" ${sw}${da(s.lineStyle)}${op}/>\n`;}
+    else if(s.type==='arrow'){const a=Math.atan2(s.y2-s.y1,s.x2-s.x1),sz=Math.max(10,s.width*4);svg+=`<line x1="${s.x1.toFixed(1)}" y1="${s.y1.toFixed(1)}" x2="${s.x2.toFixed(1)}" y2="${s.y2.toFixed(1)}" fill="none" ${sw}${da(s.lineStyle)}${op}/>\n<polygon points="${s.x2.toFixed(1)},${s.y2.toFixed(1)} ${(s.x2-sz*Math.cos(a-Math.PI/7)).toFixed(1)},${(s.y2-sz*Math.sin(a-Math.PI/7)).toFixed(1)} ${(s.x2-sz*Math.cos(a+Math.PI/7)).toFixed(1)},${(s.y2-sz*Math.sin(a+Math.PI/7)).toFixed(1)}" fill="${s.color}"${op}/>\n`;}
+    else if(s.type==='text'){s.text.split('\n').forEach((ln,i)=>{svg+=`<text x="${s.x.toFixed(1)}" y="${(s.y+(s.fontSize||18)*1.3*i).toFixed(1)}" font-size="${s.fontSize||18}" font-family="Segoe UI,system-ui,sans-serif" fill="${s.color}"${op}>${ln.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</text>\n`;});}
+  });
+  svg+='</g>\n</svg>';
+  dl(URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'})), 'drawpad-arch-'+ts()+'.svg');
+  toast('Saved as SVG');
+}
+
+function exportJSON() {
+  const data={version:2,format:'drawpad-arch-json',viewport:{panX,panY,zoom},darkBg,shapes};
+  dl(URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),'drawpad-arch-'+ts()+'.json');
+  toast('Saved as JSON');
+}
+
+function exportDPD() {
+  const data={version:2,format:'drawpad-arch-native',app:'DrawPad Arch v1.0',savedAt:new Date().toISOString(),viewport:{panX,panY,zoom},darkBg,shapes:JSON.parse(JSON.stringify(shapes)),canvasStamp};
+  dl(URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/octet-stream'})),'drawpad-arch-'+ts()+'.dparch');
+  toast('Saved .dparch');
+}
+
+function importFile(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!data.shapes || !Array.isArray(data.shapes)) throw new Error('No shapes array');
+      saveState(); shapes = data.shapes;
+      if (data.viewport) { panX=data.viewport.panX??0; panY=data.viewport.panY??0; zoom=data.viewport.zoom??1; }
+      if (data.darkBg !== undefined) darkBg = data.darkBg;
+      canvasStamp = data.canvasStamp || null;
+      document.getElementById('stampBtn').classList.toggle('active', !!canvasStamp);
+      // Re-render icons from stored svgStr (with their colours)
+      // svgStr is embedded in the shape from when it was stamped — no network needed
+      const pending = shapes.filter(s => s.type === 'icon' && s.svgStr);
+      Promise.all(pending.map(s => {
+        const cacheKey = s.iconColor ? s.key + ':' + s.iconColor : s.key;
+        if (iconImgCache[cacheKey]) return Promise.resolve();
+        // Use stored svgStr (from stamp time) or fall back to bundle
+        const baseSvg = s.svgStr || BUNDLED_ICONS[s.key] || null;
+        if (!baseSvg) return Promise.resolve();
+        const svgToDraw = s.iconColor ? recolorSVG(baseSvg, s.iconColor) : baseSvg;
+        return makeSVGImage(svgToDraw, s.size).then(img => { if (img) iconImgCache[cacheKey] = img; });
+      })).then(() => redraw());
+      selectedShapes = []; redraw();
+      toast(`Opened ${file.name} — ${shapes.length} shape${shapes.length!==1?'s':''}`);
+    } catch(err) { alert('Could not open: ' + err.message); }
+  };
+  r.readAsText(file); e.target.value='';
+}
+
+// ═══════════════════════════════════════
+// CANVAS STAMP
+// ═══════════════════════════════════════
+let canvasStamp = null;  // { text, color, opacity, style, border } | null
+
+function openStampModal() {
+  document.getElementById('stamp-modal').classList.add('open');
+  // Restore current stamp values into the UI if one exists
+  if (canvasStamp) {
+    document.getElementById('stamp-custom').value = canvasStamp.text;
+    document.getElementById('stamp-color').value   = canvasStamp.color;
+    document.getElementById('stamp-opacity').value  = canvasStamp.opacity;
+    document.getElementById('stamp-style').value    = canvasStamp.style;
+    document.getElementById('stamp-border').checked = canvasStamp.border;
+    document.getElementById('clearStampBtn').style.display = '';
+    // Highlight matching preset
+    document.querySelectorAll('.stamp-preset').forEach(b => {
+      b.classList.toggle('active', b.textContent.toUpperCase() === canvasStamp.text.toUpperCase());
+    });
+  } else {
+    document.getElementById('clearStampBtn').style.display = 'none';
+  }
+  updateStampPreview();
+  setTimeout(() => document.getElementById('stamp-custom').focus(), 100);
+}
+
+function closeStampModal() {
+  document.getElementById('stamp-modal').classList.remove('open');
+}
+
+function selectPreset(btn, text) {
+  document.getElementById('stamp-custom').value = text;
+  document.querySelectorAll('.stamp-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updateStampPreview();
+}
+
+function clearPresetActive() {
+  document.querySelectorAll('.stamp-preset').forEach(b => b.classList.remove('active'));
+}
+
+function applyStamp() {
+  const text = document.getElementById('stamp-custom').value.trim();
+  if (!text) { toast('Enter stamp text first'); return; }
+  canvasStamp = {
+    text:    text.toUpperCase(),
+    color:   document.getElementById('stamp-color').value,
+    opacity: parseFloat(document.getElementById('stamp-opacity').value),
+    style:   document.getElementById('stamp-style').value,
+    border:  document.getElementById('stamp-border').checked,
+  };
+  document.getElementById('stampBtn').classList.add('active');
+  closeStampModal();
+  redraw();
+  toast(`Stamp "${canvasStamp.text}" applied`);
+}
+
+function clearStamp() {
+  canvasStamp = null;
+  document.getElementById('stampBtn').classList.remove('active');
+  closeStampModal();
+  redraw();
+  toast('Stamp removed');
+}
+
+// Draw the stamp onto any canvas context (used for both main canvas and export)
+function drawStampOnContext(tc, w, h) {
+  if (!canvasStamp) return;
+  const { text, color, opacity, style, border } = canvasStamp;
+  tc.save();
+  tc.globalAlpha = opacity;
+
+  // Stamp font is proportionate to canvas: roughly 1.5–2× a 96px icon
+  // Clamped so it never swamps the drawing on small OR large canvases
+  const shortSide = Math.min(w, h);
+  const fontSize = Math.max(28, Math.min(shortSide * 0.065, 90));  // 28–90px
+  const cornerSize = Math.max(16, Math.min(shortSide * 0.03, 36)); // 16–36px for corner styles
+
+  tc.font = `800 ${fontSize}px 'Segoe UI', system-ui, sans-serif`;
+  tc.fillStyle    = color;
+  tc.strokeStyle  = color;
+  tc.textAlign    = 'center';
+  tc.textBaseline = 'middle';
+
+  if (style === 'diagonal') {
+    tc.translate(w / 2, h / 2);
+    tc.rotate(-Math.PI / 6);
+    if (border) {
+      tc.lineWidth = Math.max(1.5, fontSize * 0.045);
+      const tw = tc.measureText(text).width;
+      tc.strokeRect(-tw/2 - fontSize*0.35, -fontSize*0.65, tw + fontSize*0.7, fontSize*1.3);
+    }
+    tc.fillText(text, 0, 0);
+
+  } else if (style === 'horizontal') {
+    tc.translate(w / 2, h / 2);
+    if (border) {
+      tc.lineWidth = Math.max(1.5, fontSize * 0.045);
+      const tw = tc.measureText(text).width;
+      tc.strokeRect(-tw/2 - fontSize*0.35, -fontSize*0.65, tw + fontSize*0.7, fontSize*1.3);
+    }
+    tc.fillText(text, 0, 0);
+
+  } else if (style === 'corner-br') {
+    tc.font = `700 ${cornerSize}px 'Segoe UI', system-ui, sans-serif`;
+    const pad = cornerSize * 0.6;
+    const tw = tc.measureText(text).width;
+    const bx = w - tw - pad * 2.5, by = h - cornerSize - pad * 2;
+    if (border) {
+      tc.lineWidth = Math.max(1, cornerSize * 0.07);
+      tc.strokeRect(bx - pad*0.3, by - pad*0.3, tw + pad*2.6, cornerSize + pad*0.8);
+    }
+    tc.textAlign = 'left';
+    tc.fillText(text, bx + pad, by + cornerSize * 0.75);
+
+  } else if (style === 'corner-tl') {
+    tc.font = `700 ${cornerSize}px 'Segoe UI', system-ui, sans-serif`;
+    const pad = cornerSize * 0.6;
+    const tw = tc.measureText(text).width;
+    if (border) {
+      tc.lineWidth = Math.max(1, cornerSize * 0.07);
+      tc.strokeRect(pad*0.5, pad*0.5, tw + pad*2, cornerSize + pad*0.8);
+    }
+    tc.textAlign = 'left';
+    tc.fillText(text, pad, pad + cornerSize * 0.75);
+
+  } else if (style === 'tiled') {
+    const tileFont = Math.max(16, Math.min(shortSide * 0.04, 52));
+    tc.font = `800 ${tileFont}px 'Segoe UI', system-ui, sans-serif`;
+    const tileGapH = tc.measureText(text).width + tileFont * 2;
+    const tileGapV = tileFont * 3.5;
+    const diag = Math.hypot(w, h);
+    tc.rotate(-Math.PI / 6);
+    for (let ty = -diag; ty < diag * 1.5; ty += tileGapV) {
+      for (let tx = -diag; tx < diag * 1.5; tx += tileGapH) {
+        tc.fillText(text, tx, ty);
+      }
+    }
+  }
+
+  tc.restore();
+}
+
+// Preview canvas
+function updateStampPreview() {
+  const pc  = document.getElementById('stamp-preview-canvas');
+  const ptc = pc.getContext('2d');
+  const pw  = pc.offsetWidth || 312;
+  pc.width  = pw * devicePixelRatio;
+  pc.height = 70 * devicePixelRatio;
+  ptc.scale(devicePixelRatio, devicePixelRatio);
+
+  // Preview background matches current canvas bg
+  ptc.fillStyle = darkBg ? '#1a1a2e' : '#f8fafc';
+  ptc.fillRect(0, 0, pw, 70);
+
+  // Grab current modal values without applying them
+  const text = document.getElementById('stamp-custom').value.trim().toUpperCase() || 'PREVIEW';
+  const prev = {
+    text,
+    color:   document.getElementById('stamp-color').value,
+    opacity: parseFloat(document.getElementById('stamp-opacity').value),
+    style:   document.getElementById('stamp-style').value,
+    border:  document.getElementById('stamp-border').checked,
+  };
+
+  const saved = canvasStamp;
+  canvasStamp = prev;
+  drawStampOnContext(ptc, pw, 70);
+  canvasStamp = saved;
+}
+
+// Hook stamp into keyboard Escape
+// (handled in existing keydown: Escape closes stamp modal if open)
+
+// ═══════════════════════════════════════
+// KEYBOARD
+// ═══════════════════════════════════════
+document.addEventListener('keydown', e => {
+  // Close stamp modal on Escape
+  if (e.key === 'Escape' && document.getElementById('stamp-modal').classList.contains('open')) {
+    closeStampModal(); return;
+  }
+  if (e.key === 'Escape' && document.getElementById('reset-confirm').classList.contains('visible')) {
+    closeResetConfirm(); return;
+  }
+  if (e.target === textInput) return;
+  if (e.key === 'Escape')                      { cancelPlacing(); return; }
+  if (e.ctrlKey && e.key === 'z')              { undo(); return; }
+  if (e.ctrlKey && (e.key==='y'||(e.shiftKey&&e.key==='z'))) { redo(); return; }
+  if (e.ctrlKey && e.key === 'a')              { e.preventDefault(); selectedShapes=[...shapes]; setTool('select'); redraw(); return; }
+  if (e.ctrlKey && e.key === 's')              { e.preventDefault(); exportDPD(); return; }
+  if ((e.key==='Delete'||e.key==='Backspace') && selectedShapes.length) { saveState(); shapes=shapes.filter(s=>!selectedShapes.includes(s)); selectedShapes=[]; redraw(); return; }
+  if (e.ctrlKey && e.key==='d' && selectedShapes.length) { e.preventDefault(); saveState(); const copies=selectedShapes.map(s=>{const c=JSON.parse(JSON.stringify(s));moveShape(c,20,20);return c;}); shapes.push(...copies); selectedShapes=copies; redraw(); return; }
+  if (!e.ctrlKey && !e.altKey) {
+    const map={v:'select',p:'pen',l:'line',r:'rect',e:'ellipse',a:'arrow',t:'text',x:'eraser'};
+    if (map[e.key.toLowerCase()]) { setTool(map[e.key.toLowerCase()]); return; }
+    if (e.key.toLowerCase()==='i') toggleIconPanel();
+    // Fine rotation with [ and ]
+    if (e.key === '[' && selectedShapes.length) { rotateSelection(-5); return; }
+    if (e.key === ']' && selectedShapes.length) { rotateSelection(5); return; }
+  }
+});
+
+// Initial render — defer so flex layout is fully painted before reading dimensions
+requestAnimationFrame(() => { resize(); });
+</script>
+</body>
+</html>
